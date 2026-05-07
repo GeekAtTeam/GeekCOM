@@ -18,7 +18,7 @@
 
 ## 代码架构
 
-```
+```bash
 GeekCOM/
 ├── CMakeLists.txt
 ├── resources/
