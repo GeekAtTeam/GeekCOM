@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=GeekCOM
+Comment=跨平台串口调试工具
+TryExec=GeekCOM
+Exec=GeekCOM
+Icon=geekcom
+Terminal=false
+Categories=Development;Electronics;Utility;
+StartupNotify=true
+DBusActivatable=false
+StartupWMClass=GeekCOM

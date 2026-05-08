@@ -8,6 +8,7 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QApplication>
+#include <QIcon>
 #include <QStyle>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -15,6 +16,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_serial(new SerialManager(this))
 {
     setWindowTitle("GeekCOM - 串口调试工具 v1.0");
+    setWindowIcon(QIcon(QStringLiteral(":/icons/logo.png")));
     setMinimumSize(900, 600);
     resize(1100, 700);
 

@@ -21,6 +21,7 @@
 ```bash
 GeekCOM/
 ├── CMakeLists.txt
+├── packaging/linux/            # geekcom.desktop、本地安装脚本
 ├── resources/
 │   └── resources.qrc
 └── src/
@@ -70,6 +71,16 @@ cmake --build build -j$(nproc)
 # 4. 运行
 ./build/GeekCOM
 ```
+
+在 **Ubuntu / GNOME** 下，若仅直接运行 `./build/GeekCOM`，Dock 可能仍显示通用图标。请安装 `.desktop` 与 **hicolor** 图标，并与 `QGuiApplication::setDesktopFileName("geekcom")` 配合（项目已配置）。一键安装到 `~/.local`：
+
+```bash
+./packaging/linux/install-local.sh
+```
+
+脚本会把 `.desktop` 里的 `Exec` / `TryExec` 改成 `~/.local/bin/GeekCOM` 的**绝对路径**（避免 GNOME 启动时找不到程序、Dock 只显示占位图标）。请从**应用程序网格**打开 GeekCOM，不要长期直接运行 `./build/GeekCOM`。
+
+排查：用 `xprop WM_CLASS` 时，光标要点在 **GeekCOM 窗口**上再点一下；若点在终端上会得到 `gnome-terminal`，与 GeekCOM 无关。默认 **Wayland** 会话里很多应用无法用 `xprop` 查看，以「菜单安装启动」为准；仍异常时可尝试注销重登刷新图标缓存。
 
 ### macOS (Homebrew)
 ```bash

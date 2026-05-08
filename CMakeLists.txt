@@ -96,3 +96,21 @@ endif()
 if(WIN32)
     set_target_properties(GeekCOM PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
+
+# Linux：.desktop + hicolor 图标（与 QGuiApplication::setDesktopFileName("geekcom") 配合）
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+    include(GNUInstallDirs)
+    install(TARGETS GeekCOM
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+    install(FILES ${CMAKE_SOURCE_DIR}/packaging/linux/geekcom.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+    )
+    # 多档尺寸便于 GNOME 在 Dock / 应用列表中解析图标（同一 PNG，由主题缩放）
+    foreach(_s IN ITEMS 16 32 48 128 256)
+        install(FILES ${CMAKE_SOURCE_DIR}/resources/logo.png
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${_s}x${_s}/apps
+            RENAME geekcom.png
+        )
+    endforeach()
+endif()
