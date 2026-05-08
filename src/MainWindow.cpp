@@ -11,6 +11,19 @@
 #include <QIcon>
 #include <QStyle>
 
+namespace {
+
+/** 优先使用系统图标主题（常见于 Linux），否则用 Qt 标准像素图，避免依赖 Emoji 字体。 */
+QIcon tabIconThemed(const QString &iconName, QStyle::StandardPixmap fallback)
+{
+    QIcon themed = QIcon::fromTheme(iconName);
+    if (!themed.isNull())
+        return themed;
+    return QApplication::style()->standardIcon(fallback);
+}
+
+} // namespace
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , m_serial(new SerialManager(this))
@@ -32,8 +45,13 @@ void MainWindow::setupUi()
     m_terminalWidget = new SerialTerminalWidget(m_serial, this);
 
     m_tabWidget = new QTabWidget(this);
-    m_tabWidget->addTab(m_debugWidget,    "🔬  串口调试");
-    m_tabWidget->addTab(m_terminalWidget, "💻  串口终端");
+    m_tabWidget->setIconSize(QSize(16, 16));
+    m_tabWidget->addTab(m_debugWidget,
+                        tabIconThemed(QStringLiteral("accessories-text-editor"), QStyle::SP_FileDialogDetailedView),
+                        tr("串口调试"));
+    m_tabWidget->addTab(m_terminalWidget,
+                        tabIconThemed(QStringLiteral("utilities-terminal"), QStyle::SP_CommandLink),
+                        tr("串口终端"));
     setCentralWidget(m_tabWidget);
 
     // Status bar
