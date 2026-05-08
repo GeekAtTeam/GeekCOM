@@ -3,8 +3,8 @@
 #include <QByteArray>
 
 class SerialManager;
+class SerialPortConfigGroup;
 class QTextEdit;
-class QComboBox;
 class QPushButton;
 class QCheckBox;
 class QLabel;
@@ -44,14 +44,7 @@ private:
     // Left: terminal display
     QTextEdit *m_terminal;
 
-    // Right: config (shared look with debug mode)
-    QComboBox *m_portCombo;
-    QPushButton *m_refreshPortBtn;
-    QComboBox *m_baudCombo;
-    QComboBox *m_parityCombo;
-    QComboBox *m_dataBitsCombo;
-    QComboBox *m_stopBitsCombo;
-    QPushButton *m_connectBtn;
+    SerialPortConfigGroup *m_portConfig = nullptr;
 
     // Terminal options
     QCheckBox *m_localEchoCheck;

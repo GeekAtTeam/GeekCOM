@@ -1,10 +1,9 @@
 #include "SerialTerminalWidget.h"
 #include "SerialManager.h"
-#include "SerialBaudRates.h"
+#include "SerialPortConfigGroup.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
-#include <QGridLayout>
 #include <QGroupBox>
 #include <QTextEdit>
 #include <QComboBox>
@@ -36,51 +35,8 @@ void SerialTerminalWidget::setupUi()
     rightLayout->setSpacing(8);
     rightLayout->setContentsMargins(8, 8, 8, 8);
 
-    auto *portGroup = new QGroupBox("串口配置");
-    auto *portGrid = new QGridLayout(portGroup);
-    portGrid->setSpacing(6);
-
-    portGrid->addWidget(new QLabel("端口"), 0, 0);
-    m_portCombo = new QComboBox;
-    m_refreshPortBtn = new QPushButton("↻");
-    m_refreshPortBtn->setFixedWidth(28);
-    m_refreshPortBtn->setToolTip("刷新串口列表");
-    auto *portRow = new QHBoxLayout;
-    portRow->addWidget(m_portCombo);
-    portRow->addWidget(m_refreshPortBtn);
-    portGrid->addLayout(portRow, 0, 1);
-
-    portGrid->addWidget(new QLabel("波特率"), 1, 0);
-    m_baudCombo = new QComboBox;
-    SerialBaudRates::populateBaudCombo(m_baudCombo);
-    m_baudCombo->setCurrentText("115200");
-    portGrid->addWidget(m_baudCombo, 1, 1);
-
-    portGrid->addWidget(new QLabel("校验位"), 2, 0);
-    m_parityCombo = new QComboBox;
-    m_parityCombo->addItem("None", QSerialPort::NoParity);
-    m_parityCombo->addItem("Odd",  QSerialPort::OddParity);
-    m_parityCombo->addItem("Even", QSerialPort::EvenParity);
-    portGrid->addWidget(m_parityCombo, 2, 1);
-
-    portGrid->addWidget(new QLabel("数据位"), 3, 0);
-    m_dataBitsCombo = new QComboBox;
-    m_dataBitsCombo->addItem("8", QSerialPort::Data8);
-    m_dataBitsCombo->addItem("7", QSerialPort::Data7);
-    portGrid->addWidget(m_dataBitsCombo, 3, 1);
-
-    portGrid->addWidget(new QLabel("停止位"), 4, 0);
-    m_stopBitsCombo = new QComboBox;
-    m_stopBitsCombo->addItem("1", QSerialPort::OneStop);
-    m_stopBitsCombo->addItem("2", QSerialPort::TwoStop);
-    portGrid->addWidget(m_stopBitsCombo, 4, 1);
-
-    m_connectBtn = new QPushButton("打开串口");
-    m_connectBtn->setCheckable(true);
-    m_connectBtn->setMinimumHeight(36);
-    portGrid->addWidget(m_connectBtn, 5, 0, 1, 2);
-
-    rightLayout->addWidget(portGroup);
+    m_portConfig = new SerialPortConfigGroup;
+    rightLayout->addWidget(m_portConfig);
 
     // Terminal options
     auto *termGroup = new QGroupBox("终端设置");
@@ -122,22 +78,22 @@ void SerialTerminalWidget::setupUi()
 
 void SerialTerminalWidget::setupConnections()
 {
-    connect(m_connectBtn,    &QPushButton::toggled, this, &SerialTerminalWidget::onToggleConnection);
-    connect(m_clearBtn,      &QPushButton::clicked, this, &SerialTerminalWidget::onClearScreen);
-    connect(m_refreshPortBtn,&QPushButton::clicked, this, &SerialTerminalWidget::onRefreshPorts);
+    connect(m_portConfig->connectButton(), &QPushButton::toggled, this, &SerialTerminalWidget::onToggleConnection);
+    connect(m_clearBtn, &QPushButton::clicked, this, &SerialTerminalWidget::onClearScreen);
+    connect(m_portConfig->refreshPortButton(), &QPushButton::clicked, this, &SerialTerminalWidget::onRefreshPorts);
 }
 
 void SerialTerminalWidget::onToggleConnection()
 {
-    if (m_connectBtn->isChecked()) {
-        QString port = m_portCombo->currentText();
-        int baud = m_baudCombo->currentData().toInt();
-        auto parity   = (QSerialPort::Parity)  m_parityCombo->currentData().toInt();
-        auto dataBits = (QSerialPort::DataBits) m_dataBitsCombo->currentData().toInt();
-        auto stopBits = (QSerialPort::StopBits) m_stopBitsCombo->currentData().toInt();
+    if (m_portConfig->connectButton()->isChecked()) {
+        QString port = m_portConfig->portCombo()->currentText();
+        int baud = m_portConfig->baudCombo()->currentData().toInt();
+        auto parity   = (QSerialPort::Parity)  m_portConfig->parityCombo()->currentData().toInt();
+        auto dataBits = (QSerialPort::DataBits) m_portConfig->dataBitsCombo()->currentData().toInt();
+        auto stopBits = (QSerialPort::StopBits) m_portConfig->stopBitsCombo()->currentData().toInt();
 
         if (!m_serial->open(port, baud, dataBits, parity, stopBits)) {
-            m_connectBtn->setChecked(false);
+            m_portConfig->connectButton()->setChecked(false);
             QMessageBox::warning(this, "连接失败", "无法打开串口，请检查端口设置。");
             return;
         }
@@ -151,17 +107,13 @@ void SerialTerminalWidget::onToggleConnection()
 
 void SerialTerminalWidget::applyConnectedState(bool connected)
 {
-    m_connectBtn->setText(connected ? "关闭串口" : "打开串口");
-    m_connectBtn->setStyleSheet(connected
+    m_portConfig->connectButton()->setText(connected ? "关闭串口" : "打开串口");
+    m_portConfig->connectButton()->setStyleSheet(connected
         ? "QPushButton { background:#c00; color:white; font-weight:bold; border-radius:4px; min-height:36px; }"
           "QPushButton:hover { background:#a00; }"
         : "QPushButton { background:#090; color:white; font-weight:bold; border-radius:4px; min-height:36px; }"
           "QPushButton:hover { background:#070; }");
-    m_portCombo->setEnabled(!connected);
-    m_baudCombo->setEnabled(!connected);
-    m_parityCombo->setEnabled(!connected);
-    m_dataBitsCombo->setEnabled(!connected);
-    m_stopBitsCombo->setEnabled(!connected);
+    m_portConfig->setParameterFieldsEnabled(!connected);
     m_statusLabel->setText(connected
         ? QString("已连接 %1").arg(m_serial->portName())
         : "未连接");
@@ -289,10 +241,10 @@ void SerialTerminalWidget::onClearScreen()
 
 void SerialTerminalWidget::onRefreshPorts()
 {
-    QString current = m_portCombo->currentText();
-    m_portCombo->clear();
+    QString current = m_portConfig->portCombo()->currentText();
+    m_portConfig->portCombo()->clear();
     for (const QString &p : SerialManager::availablePorts())
-        m_portCombo->addItem(p);
-    int idx = m_portCombo->findText(current);
-    if (idx >= 0) m_portCombo->setCurrentIndex(idx);
+        m_portConfig->portCombo()->addItem(p);
+    int idx = m_portConfig->portCombo()->findText(current);
+    if (idx >= 0) m_portConfig->portCombo()->setCurrentIndex(idx);
 }

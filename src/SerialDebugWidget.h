@@ -4,6 +4,7 @@
 #include <QTimer>
 
 class SerialManager;
+class SerialPortConfigGroup;
 class QTextEdit;
 class QComboBox;
 class QPushButton;
@@ -48,14 +49,8 @@ private:
     // Serial
     SerialManager *m_serial;
 
-    // --- Right panel: Port Config ---
-    QComboBox *m_portCombo;
-    QPushButton *m_refreshPortBtn;
-    QComboBox *m_baudCombo;
-    QComboBox *m_parityCombo;
-    QComboBox *m_dataBitsCombo;
-    QComboBox *m_stopBitsCombo;
-    QPushButton *m_connectBtn;
+    // --- Right panel: Port Config (shared widget) ---
+    SerialPortConfigGroup *m_portConfig = nullptr;
 
     // --- Right panel: Receive options ---
     QCheckBox *m_rxHexCheck;
