@@ -28,6 +28,7 @@ set(HEADERS
     src/SerialTerminalWidget.h
     src/SerialManager.h
     src/HexUtils.h
+    src/SerialBaudRates.h
 )
 
 add_executable(GeekCOM

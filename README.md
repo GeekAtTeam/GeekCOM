@@ -5,7 +5,7 @@
 ## 功能特性
 
 ### 串口调试模式
-- 串口配置：端口、波特率（1200~921600）、校验位、数据位、停止位
+- 串口配置：端口、波特率（1200~1500000，含 SBUS 100000）、校验位、数据位、停止位
 - **接收区**：十六进制 / ASCII 显示切换、时间戳标注、自动清空、保存到文件
 - **发送区**：十六进制 / ASCII 发送、文件发送、定时自动发送
 - 底部状态栏：RX/TX 字节计数、计数清零
@@ -29,6 +29,7 @@ GeekCOM/
     ├── SerialManager.h/cpp       # 串口封装（QSerialPort），RX/TX 统计
     ├── SerialDebugWidget.h/cpp   # 串口调试模式 UI
     ├── SerialTerminalWidget.h/cpp # 串口终端模式 UI
+    ├── SerialBaudRates.h         # 统一波特率列表与下拉填充
     └── HexUtils.h/cpp            # HEX 字符串 ↔ QByteArray 转换工具
 ```
 

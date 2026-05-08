@@ -1,5 +1,6 @@
 #include "SerialDebugWidget.h"
 #include "SerialManager.h"
+#include "SerialBaudRates.h"
 #include "HexUtils.h"
 
 #include <QHBoxLayout>
@@ -60,8 +61,7 @@ void SerialDebugWidget::setupUi()
 
     portGrid->addWidget(new QLabel("波特率"), 1, 0);
     m_baudCombo = new QComboBox;
-    for (auto b : {1200,2400,4800,9600,19200,38400,57600,115200,230400,460800,921600})
-        m_baudCombo->addItem(QString::number(b), b);
+    SerialBaudRates::populateBaudCombo(m_baudCombo);
     m_baudCombo->setCurrentText("115200");
     portGrid->addWidget(m_baudCombo, 1, 1);
 
