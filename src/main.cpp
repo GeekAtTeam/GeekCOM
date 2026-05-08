@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include <QApplication>
+#include <QIcon>
 #include <QStyleFactory>
 
 int main(int argc, char *argv[])
@@ -8,6 +9,7 @@ int main(int argc, char *argv[])
     app.setApplicationName("GeekCOM");
     app.setApplicationVersion("1.0.0");
     app.setOrganizationName("GeekCOM");
+    app.setWindowIcon(QIcon(QStringLiteral(":/icons/logo.png")));
 
     // Use Fusion style for consistent cross-platform look
     app.setStyle(QStyleFactory::create("Fusion"));
