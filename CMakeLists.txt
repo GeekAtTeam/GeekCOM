@@ -67,18 +67,18 @@ if(APPLE)
             OUTPUT ${GEEKCOM_ICNS}
             COMMAND ${CMAKE_COMMAND} -E rm -rf ${GEEKCOM_ICONSET_DIR}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${GEEKCOM_ICONSET_DIR}
-            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/logo.png -resize 16x16     ${GEEKCOM_ICONSET_DIR}/icon_16x16.png
-            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/logo.png -resize 32x32     ${GEEKCOM_ICONSET_DIR}/icon_16x16@2x.png
-            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/logo.png -resize 32x32     ${GEEKCOM_ICONSET_DIR}/icon_32x32.png
-            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/logo.png -resize 64x64     ${GEEKCOM_ICONSET_DIR}/icon_32x32@2x.png
-            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/logo.png -resize 128x128   ${GEEKCOM_ICONSET_DIR}/icon_128x128.png
-            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/logo.png -resize 256x256   ${GEEKCOM_ICONSET_DIR}/icon_128x128@2x.png
-            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/logo.png -resize 256x256   ${GEEKCOM_ICONSET_DIR}/icon_256x256.png
-            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/logo.png -resize 512x512   ${GEEKCOM_ICONSET_DIR}/icon_256x256@2x.png
-            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/logo.png -resize 512x512   ${GEEKCOM_ICONSET_DIR}/icon_512x512.png
-            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/logo.png -resize 1024x1024 ${GEEKCOM_ICONSET_DIR}/icon_512x512@2x.png
+            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/resources/logo.png -resize 16x16     ${GEEKCOM_ICONSET_DIR}/icon_16x16.png
+            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/resources/logo.png -resize 32x32     ${GEEKCOM_ICONSET_DIR}/icon_16x16@2x.png
+            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/resources/logo.png -resize 32x32     ${GEEKCOM_ICONSET_DIR}/icon_32x32.png
+            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/resources/logo.png -resize 64x64     ${GEEKCOM_ICONSET_DIR}/icon_32x32@2x.png
+            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/resources/logo.png -resize 128x128   ${GEEKCOM_ICONSET_DIR}/icon_128x128.png
+            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/resources/logo.png -resize 256x256   ${GEEKCOM_ICONSET_DIR}/icon_128x128@2x.png
+            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/resources/logo.png -resize 256x256   ${GEEKCOM_ICONSET_DIR}/icon_256x256.png
+            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/resources/logo.png -resize 512x512   ${GEEKCOM_ICONSET_DIR}/icon_256x256@2x.png
+            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/resources/logo.png -resize 512x512   ${GEEKCOM_ICONSET_DIR}/icon_512x512.png
+            COMMAND ${IMAGEMAGICK_CONVERT} ${CMAKE_SOURCE_DIR}/resources/logo.png -resize 1024x1024 ${GEEKCOM_ICONSET_DIR}/icon_512x512@2x.png
             COMMAND ${ICONUTIL} -c icns ${GEEKCOM_ICONSET_DIR} -o ${GEEKCOM_ICNS}
-            DEPENDS ${CMAKE_SOURCE_DIR}/logo.png
+            DEPENDS ${CMAKE_SOURCE_DIR}/resources/logo.png
             COMMENT "Generating GeekCOM.icns for macOS bundle"
             VERBATIM
         )
