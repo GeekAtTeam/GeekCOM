@@ -42,12 +42,17 @@ public:
         QColor accent;
         QColor accentHover;
         QColor accentText;
+        QColor accentMuted;
         QColor danger;
         QColor dangerHover;
         QColor dangerText;
         QColor success;
         QColor successHover;
         QColor warning;
+
+        /** Optional product-specific tokens (GeekCAN bus lines). */
+        QColor canHigh;
+        QColor canLow;
 
         /** Always-dark code/log surfaces (strategy A). */
         QColor logBg;
@@ -71,8 +76,17 @@ public:
 
     static ThemeManager &instance();
 
-    /** Call once before apply(); accent is app brand color. */
+    /**
+     * Brand colors from the product logo. Call once before apply().
+     * @param canHigh / canLow  optional CAN-H / CAN-L line colors (GeekCAN).
+     */
+    void setBrand(const QColor &accent, const QColor &accentHover,
+                  const QColor &canHigh = QColor(),
+                  const QColor &canLow = QColor());
+
+    /** @deprecated use setBrand */
     void setAccent(const QColor &accent, const QColor &accentHover);
+
 
     void setMode(Mode mode);
     Mode mode() const { return m_mode; }
@@ -116,8 +130,10 @@ private:
     Mode m_mode = Mode::System;
     Scheme m_scheme = Scheme::Dark;
     Colors m_colors;
-    QColor m_accent{0x00, 0x78, 0xd4};
-    QColor m_accentHover{0x10, 0x6e, 0xbe};
+    QColor m_accent{0xE4, 0x2C, 0x2C};
+    QColor m_accentHover{0xC4, 0x25, 0x25};
+    QColor m_canHigh;
+    QColor m_canLow;
 
     QAction *m_actSystem = nullptr;
     QAction *m_actLight = nullptr;

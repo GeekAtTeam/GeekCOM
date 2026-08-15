@@ -17,7 +17,8 @@ int main(int argc, char *argv[])
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/logo.png")));
 
     auto &theme = ThemeManager::instance();
-    theme.setAccent(QColor(0x00, 0x78, 0xd4), QColor(0x10, 0x6e, 0xbe));
+    // Brand from logo: #E42C2C
+    theme.setBrand(QColor(0xE4, 0x2C, 0x2C), QColor(0xC4, 0x25, 0x25));
     theme.loadSettings();
     theme.apply();
 

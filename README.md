@@ -25,7 +25,8 @@ GeekCOM/
 ├── resources/
 │   └── resources.qrc
 └── src/
-    ├── main.cpp                  # 入口，Fusion 深色主题
+    ├── main.cpp                  # 入口，ThemeManager 品牌色 / 主题
+    ├── ThemeManager.h/cpp        # 系统/浅色/深色主题与语义色 Token
     ├── MainWindow.h/cpp          # 主窗口，Tab 切换，SerialManager 信号分发
     ├── SerialManager.h/cpp       # 串口封装（QSerialPort），RX/TX 统计
     ├── SerialDebugWidget.h/cpp   # 串口调试模式 UI
@@ -45,6 +46,30 @@ MainWindow
 
 `SerialManager` 是唯一的串口操作对象，两个模式 Widget 共享同一实例，
 MainWindow 负责将 `dataReceived` 信号路由给当前激活的 Widget。
+
+## 外观与主题
+
+由 `ThemeManager` 统一管理，菜单 **视图 → 外观**：
+
+| 模式 | 说明 |
+|------|------|
+| 跟随系统（默认） | 跟随 Ubuntu / GNOME 的 light / dark |
+| 浅色 / 深色 | 手动固定 |
+
+**设计原则：**
+
+- 窗口 chrome（面板、Tab、按钮）跟随浅色/深色方案
+- 接收区 / 终端等日志面保持深色（便于阅读 HEX / ASCII）
+- 主色与 Logo 一致，仅用于强调（主按钮、焦点、选中），状态色仍用绿/红语义色
+
+**品牌色（Logo）：**
+
+| Token | 色值 | 用途 |
+|-------|------|------|
+| Accent | `#E42C2C` | 主按钮、焦点边框、高亮 |
+| Accent Hover | `#C42525` | 主按钮悬停 |
+
+偏好写入 `QSettings`（`ui/themeMode`）。
 
 ## 环境要求
 

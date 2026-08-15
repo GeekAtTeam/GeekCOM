@@ -64,6 +64,7 @@ void SerialTerminalWidget::setupUi()
     m_terminal = new QTextEdit;
     m_terminal->setReadOnly(false); // We handle input manually
     m_terminal->setFont(QFont("Courier New", 10));
+    m_terminal->setProperty("logView", true);
     m_terminal->installEventFilter(this);
     // Prevent normal text input (we handle it ourselves)
     m_terminal->setUndoRedoEnabled(false);

@@ -29,10 +29,18 @@ ThemeManager::ThemeManager(QObject *parent)
     startSystemWatch();
 }
 
-void ThemeManager::setAccent(const QColor &accent, const QColor &accentHover)
+void ThemeManager::setBrand(const QColor &accent, const QColor &accentHover,
+                            const QColor &canHigh, const QColor &canLow)
 {
     m_accent = accent;
     m_accentHover = accentHover;
+    m_canHigh = canHigh;
+    m_canLow = canLow;
+}
+
+void ThemeManager::setAccent(const QColor &accent, const QColor &accentHover)
+{
+    setBrand(accent, accentHover);
 }
 
 void ThemeManager::loadSettings()
@@ -128,6 +136,9 @@ ThemeManager::Colors ThemeManager::buildColors(Scheme scheme) const
     c.accent = m_accent;
     c.accentHover = m_accentHover;
     c.accentText = Qt::white;
+    c.accentMuted = (scheme == Scheme::Light) ? m_accent.lighter(185) : m_accent.darker(160);
+    c.canHigh = m_canHigh;
+    c.canLow = m_canLow;
     c.danger = QColor(0xcc, 0x00, 0x00);
     c.dangerHover = QColor(0xaa, 0x00, 0x00);
     c.dangerText = Qt::white;
@@ -139,9 +150,9 @@ ThemeManager::Colors ThemeManager::buildColors(Scheme scheme) const
     c.logBg = QColor(0x1e, 0x1e, 0x1e);
     c.logFg = QColor(0xd4, 0xd4, 0xd4);
     c.logMuted = QColor(0x88, 0x88, 0x88);
-    c.logAccent = QColor(0x56, 0x9c, 0xd6);
+    c.logAccent = m_accent.lighter(140);
     c.logHex = QColor(0x9c, 0xdc, 0xfe);
-    c.logTimestamp = QColor(0x56, 0x9c, 0xd6);
+    c.logTimestamp = m_accent.lighter(150);
 
     if (scheme == Scheme::Light) {
         c.window = QColor(0xf3, 0xf3, 0xf3);
@@ -164,13 +175,13 @@ ThemeManager::Colors ThemeManager::buildColors(Scheme scheme) const
         c.tooltipText = QColor(0x1a, 0x1a, 0x1a);
 
         c.tableHeaderBg = QColor(0xe8, 0xe8, 0xe8);
-        c.tableHeaderFg = QColor(0x00, 0x66, 0xaa);
+        c.tableHeaderFg = m_accent.darker(110);
         c.rowRxBg = QColor(0xff, 0xff, 0xff);
         c.rowTxBg = QColor(0xf3, 0xf8, 0xec);
         c.rowFdBg = QColor(0xf5, 0xf0, 0xfa);
         c.rowErrorBg = QColor(0xfd, 0xeb, 0xeb);
-        c.rowRxFg = QColor(0x00, 0x66, 0xaa);
-        c.rowTxFg = QColor(0xb0, 0x71, 0x00);
+        c.rowRxFg = m_canHigh.isValid() ? m_canHigh.darker(120) : m_accent.darker(110);
+        c.rowTxFg = m_canLow.isValid() ? m_canLow.darker(130) : QColor(0xb0, 0x71, 0x00);
         c.rowFdFg = QColor(0x7b, 0x1f, 0xa2);
         c.rowErrorFg = QColor(0xc6, 0x28, 0x28);
     } else {
@@ -194,13 +205,13 @@ ThemeManager::Colors ThemeManager::buildColors(Scheme scheme) const
         c.tooltipText = QColor(0xdc, 0xdc, 0xdc);
 
         c.tableHeaderBg = QColor(0x2d, 0x2d, 0x2d);
-        c.tableHeaderFg = QColor(0x9c, 0xdc, 0xfe);
+        c.tableHeaderFg = m_accent.lighter(145);
         c.rowRxBg = QColor(0x1e, 0x1e, 0x1e);
         c.rowTxBg = QColor(0x1e, 0x23, 0x18);
         c.rowFdBg = QColor(0x1f, 0x1b, 0x2e);
         c.rowErrorBg = QColor(0x3b, 0x17, 0x17);
-        c.rowRxFg = QColor(0x9c, 0xdc, 0xfe);
-        c.rowTxFg = QColor(0xf9, 0xa8, 0x25);
+        c.rowRxFg = m_canHigh.isValid() ? m_canHigh : m_accent.lighter(145);
+        c.rowTxFg = m_canLow.isValid() ? m_canLow : QColor(0xf9, 0xa8, 0x25);
         c.rowFdFg = QColor(0xce, 0x93, 0xd8);
         c.rowErrorFg = QColor(0xf4, 0x43, 0x36);
     }
@@ -263,6 +274,12 @@ QString ThemeManager::buildStyleSheet(const Colors &c) const
         "}"
         "QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus,"
         "QTextEdit:focus, QPlainTextEdit:focus { border-color: {{accent}}; }"
+        "QTextEdit[logView=\"true\"], QPlainTextEdit[logView=\"true\"] {"
+        "  background: {{logBg}}; color: {{logFg}}; border: 1px solid {{logBorder}};"
+        "}"
+        "QTextEdit[logView=\"true\"]:focus, QPlainTextEdit[logView=\"true\"]:focus {"
+        "  border: 1px solid {{logBorder}};"
+        "}"
         "QPushButton {"
         "  background: {{button}}; color: {{buttonText}}; border: 1px solid {{border}};"
         "  border-radius: 4px; padding: 4px 12px;"
@@ -310,6 +327,9 @@ QString ThemeManager::buildStyleSheet(const Colors &c) const
     sub("{{alt}}", c.alternateBase);
     sub("{{tipBase}}", c.tooltipBase);
     sub("{{tipText}}", c.tooltipText);
+    sub("{{logBg}}", c.logBg);
+    sub("{{logFg}}", c.logFg);
+    sub("{{logBorder}}", QColor(0x3a, 0x3a, 0x3a));
     return qss;
 }
 
@@ -344,9 +364,18 @@ QString ThemeManager::styleDangerButton(int minHeight) const
 
 QString ThemeManager::styleLogView(bool borderless) const
 {
-    return QStringLiteral("background:%1; color:%2;%3")
-        .arg(css(m_colors.logBg), css(m_colors.logFg),
-             borderless ? QStringLiteral(" border:none;") : QString());
+    // Keep focus ring neutral — brand accent border looks noisy on log panes.
+    if (borderless) {
+        return QStringLiteral(
+                   "QTextEdit, QPlainTextEdit { background:%1; color:%2; border:none; }"
+                   "QTextEdit:focus, QPlainTextEdit:focus { border:none; }")
+            .arg(css(m_colors.logBg), css(m_colors.logFg));
+    }
+    const QString edge = QStringLiteral("#3a3a3a");
+    return QStringLiteral(
+               "QTextEdit, QPlainTextEdit { background:%1; color:%2; border:1px solid %3; }"
+               "QTextEdit:focus, QPlainTextEdit:focus { border:1px solid %3; }")
+        .arg(css(m_colors.logBg), css(m_colors.logFg), edge);
 }
 
 QString ThemeManager::styleMutedText(bool bold) const

@@ -45,6 +45,8 @@ MainWindow::~MainWindow() = default;
 
 void MainWindow::setupMenu()
 {
+    // Ubuntu/GNOME 下原生菜单常被挪到顶栏或直接消失，强制显示在窗口内
+    menuBar()->setNativeMenuBar(false);
     auto *viewMenu = menuBar()->addMenu(tr("视图"));
     ThemeManager::instance().installMenu(viewMenu);
 }

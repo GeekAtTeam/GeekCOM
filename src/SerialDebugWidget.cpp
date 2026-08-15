@@ -258,7 +258,7 @@ void SerialDebugWidget::applyThemeStyles()
         m_rxTitle->setStyleSheet(t.styleMutedText(true));
     if (m_txTitle)
         m_txTitle->setStyleSheet(t.styleMutedText(true));
-    m_receiveEdit->setStyleSheet(t.styleLogView());
+    m_receiveEdit->setStyleSheet(t.styleLogView(true));
     m_sendBtn->setStyleSheet(t.stylePrimaryButton(36));
     m_portConfig->connectButton()->setStyleSheet(
         m_connected ? t.styleDangerButton(36) : t.styleSuccessButton(36));
