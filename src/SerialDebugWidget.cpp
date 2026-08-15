@@ -2,6 +2,7 @@
 #include "SerialManager.h"
 #include "SerialPortConfigGroup.h"
 #include "HexUtils.h"
+#include "ThemeManager.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -32,6 +33,9 @@ SerialDebugWidget::SerialDebugWidget(SerialManager *serial, QWidget *parent)
     setupUi();
     setupConnections();
     applyConnectedState(false);
+    applyThemeStyles();
+    connect(&ThemeManager::instance(), &ThemeManager::themeChanged,
+            this, &SerialDebugWidget::onThemeChanged);
 }
 
 void SerialDebugWidget::setupUi()
@@ -112,13 +116,12 @@ void SerialDebugWidget::setupUi()
     auto *rxVBox = new QVBoxLayout(rxWidget);
     rxVBox->setContentsMargins(4, 4, 4, 4);
     rxVBox->setSpacing(4);
-    auto *rxTitle = new QLabel("接收区");
-    rxTitle->setStyleSheet("font-weight:bold; color:#555;");
+    m_rxTitle = new QLabel("接收区");
     m_receiveEdit = new QTextEdit;
     m_receiveEdit->setReadOnly(true);
     m_receiveEdit->setFont(QFont("Courier New", 10));
-    m_receiveEdit->setStyleSheet("background:#1e1e1e; color:#d4d4d4;");
-    rxVBox->addWidget(rxTitle);
+    m_receiveEdit->setProperty("logView", true);
+    rxVBox->addWidget(m_rxTitle);
     rxVBox->addWidget(m_receiveEdit);
     splitter->addWidget(rxWidget);
 
@@ -127,18 +130,14 @@ void SerialDebugWidget::setupUi()
     auto *txVBox = new QVBoxLayout(txWidget);
     txVBox->setContentsMargins(4, 4, 4, 4);
     txVBox->setSpacing(4);
-    auto *txTitle = new QLabel("发送区");
-    txTitle->setStyleSheet("font-weight:bold; color:#555;");
+    m_txTitle = new QLabel("发送区");
     m_sendEdit = new QTextEdit;
     m_sendEdit->setFont(QFont("Courier New", 10));
     m_sendEdit->setPlaceholderText("输入要发送的数据...");
     m_sendEdit->setMaximumHeight(120);
     m_sendBtn = new QPushButton("发 送");
     m_sendBtn->setFixedHeight(36);
-    m_sendBtn->setStyleSheet("QPushButton { background:#0078d4; color:white; font-weight:bold; border-radius:4px; }"
-                             "QPushButton:hover { background:#106ebe; }"
-                             "QPushButton:disabled { background:#aaa; }");
-    txVBox->addWidget(txTitle);
+    txVBox->addWidget(m_txTitle);
     txVBox->addWidget(m_sendEdit);
     txVBox->addWidget(m_sendBtn);
     splitter->addWidget(txWidget);
@@ -239,15 +238,30 @@ void SerialDebugWidget::onToggleConnection()
 
 void SerialDebugWidget::applyConnectedState(bool connected)
 {
+    m_connected = connected;
     m_portConfig->connectButton()->setText(connected ? "关闭串口" : "打开串口");
-    m_portConfig->connectButton()->setStyleSheet(connected
-        ? "QPushButton { background:#c00; color:white; font-weight:bold; border-radius:4px; min-height:36px; }"
-          "QPushButton:hover { background:#a00; }"
-        : "QPushButton { background:#090; color:white; font-weight:bold; border-radius:4px; min-height:36px; }"
-          "QPushButton:hover { background:#070; }");
     m_sendBtn->setEnabled(connected);
     m_sendFileBtn->setEnabled(connected);
     m_portConfig->setParameterFieldsEnabled(!connected);
+    applyThemeStyles();
+}
+
+void SerialDebugWidget::onThemeChanged()
+{
+    applyThemeStyles();
+}
+
+void SerialDebugWidget::applyThemeStyles()
+{
+    auto &t = ThemeManager::instance();
+    if (m_rxTitle)
+        m_rxTitle->setStyleSheet(t.styleMutedText(true));
+    if (m_txTitle)
+        m_txTitle->setStyleSheet(t.styleMutedText(true));
+    m_receiveEdit->setStyleSheet(t.styleLogView());
+    m_sendBtn->setStyleSheet(t.stylePrimaryButton(36));
+    m_portConfig->connectButton()->setStyleSheet(
+        m_connected ? t.styleDangerButton(36) : t.styleSuccessButton(36));
 }
 
 void SerialDebugWidget::onDataReceived(const QByteArray &data)
@@ -261,16 +275,20 @@ void SerialDebugWidget::onDataReceived(const QByteArray &data)
 void SerialDebugWidget::appendToReceive(const QByteArray &data)
 {
     QString prefix;
+    auto &t = ThemeManager::instance();
     if (m_timestampCheck->isChecked()) {
-        prefix = QString("<span style='color:#569cd6;'>time -&gt; %1</span><br>")
-                     .arg(QDateTime::currentDateTime().toString("hh:mm:ss.zzz"));
+        prefix = QString("<span style='color:%1;'>time -&gt; %2</span><br>")
+                     .arg(t.css(t.colors().logTimestamp),
+                          QDateTime::currentDateTime().toString("hh:mm:ss.zzz"));
     }
 
     QString content;
     if (m_rxHexCheck->isChecked()) {
-        content = QString("<span style='color:#9cdcfe;'>%1</span>").arg(HexUtils::toHexString(data).toHtmlEscaped());
+        content = QString("<span style='color:%1;'>%2</span>")
+                      .arg(t.css(t.colors().logHex), HexUtils::toHexString(data).toHtmlEscaped());
     } else {
-        content = QString("<span style='color:#d4d4d4;'>%1</span>").arg(QString::fromUtf8(data).toHtmlEscaped());
+        content = QString("<span style='color:%1;'>%2</span>")
+                      .arg(t.css(t.colors().logFg), QString::fromUtf8(data).toHtmlEscaped());
     }
 
     m_receiveEdit->moveCursor(QTextCursor::End);

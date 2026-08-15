@@ -38,53 +38,47 @@ private slots:
     void onCountClear();
     void onRefreshPorts();
     void updateStatusBar();
+    void onThemeChanged();
 
 private:
     void setupUi();
     void setupConnections();
     void appendToReceive(const QByteArray &data);
     void applyConnectedState(bool connected);
+    void applyThemeStyles();
     QByteArray buildSendData() const;
 
-    // Serial
     SerialManager *m_serial;
-
-    // --- Right panel: Port Config (shared widget) ---
     SerialPortConfigGroup *m_portConfig = nullptr;
 
-    // --- Right panel: Receive options ---
     QCheckBox *m_rxHexCheck;
     QCheckBox *m_timestampCheck;
     QCheckBox *m_autoClearCheck;
     QPushButton *m_clearRxBtn;
     QPushButton *m_saveRxBtn;
 
-    // --- Left: Receive area ---
+    QLabel *m_rxTitle = nullptr;
     QTextEdit *m_receiveEdit;
 
-    // --- Left: Send area ---
+    QLabel *m_txTitle = nullptr;
     QTextEdit *m_sendEdit;
 
-    // --- Right panel: Send options ---
     QCheckBox *m_txHexCheck;
     QLineEdit *m_filePathEdit;
     QPushButton *m_chooseFileBtn;
     QPushButton *m_sendFileBtn;
     QCheckBox *m_autoSendCheck;
-    QSpinBox *m_autoSendIntervalSpin; // ms
+    QSpinBox *m_autoSendIntervalSpin;
     QPushButton *m_sendBtn;
 
-    // --- Status bar ---
     QLabel *m_rxLabel;
     QLabel *m_txLabel;
     QPushButton *m_countClearBtn;
     QLabel *m_autoSendLabel;
     QSpinBox *m_autoSendCountSpin;
 
-    // Auto send timer
     QTimer *m_autoSendTimer;
     QString m_pendingFilePath;
-
-    // Buffer for partial hex line display
     QByteArray m_rxBuffer;
+    bool m_connected = false;
 };

@@ -16,6 +16,7 @@ find_package(Qt6 REQUIRED COMPONENTS
 set(SOURCES
     src/main.cpp
     src/MainWindow.cpp
+    src/ThemeManager.cpp
     src/SerialPortConfigGroup.cpp
     src/SerialDebugWidget.cpp
     src/SerialTerminalWidget.cpp
@@ -29,6 +30,7 @@ endif()
 
 set(HEADERS
     src/MainWindow.h
+    src/ThemeManager.h
     src/SerialPortConfigGroup.h
     src/SerialDebugWidget.h
     src/SerialTerminalWidget.h

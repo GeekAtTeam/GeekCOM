@@ -1,6 +1,7 @@
 #include "SerialTerminalWidget.h"
 #include "SerialManager.h"
 #include "SerialPortConfigGroup.h"
+#include "ThemeManager.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -24,6 +25,9 @@ SerialTerminalWidget::SerialTerminalWidget(SerialManager *serial, QWidget *paren
     setupUi();
     setupConnections();
     applyConnectedState(false);
+    applyThemeStyles();
+    connect(&ThemeManager::instance(), &ThemeManager::themeChanged,
+            this, &SerialTerminalWidget::onThemeChanged);
 }
 
 void SerialTerminalWidget::setupUi()
@@ -54,14 +58,12 @@ void SerialTerminalWidget::setupUi()
 
     m_statusLabel = new QLabel("未连接");
     m_statusLabel->setAlignment(Qt::AlignCenter);
-    m_statusLabel->setStyleSheet("color: #888;");
     rightLayout->addWidget(m_statusLabel);
 
     // ===================== Terminal Area =====================
     m_terminal = new QTextEdit;
     m_terminal->setReadOnly(false); // We handle input manually
     m_terminal->setFont(QFont("Courier New", 10));
-    m_terminal->setStyleSheet("background:#0c0c0c; color:#cccccc; border:none;");
     m_terminal->installEventFilter(this);
     // Prevent normal text input (we handle it ourselves)
     m_terminal->setUndoRedoEnabled(false);
@@ -107,17 +109,28 @@ void SerialTerminalWidget::onToggleConnection()
 
 void SerialTerminalWidget::applyConnectedState(bool connected)
 {
+    m_connected = connected;
     m_portConfig->connectButton()->setText(connected ? "关闭串口" : "打开串口");
-    m_portConfig->connectButton()->setStyleSheet(connected
-        ? "QPushButton { background:#c00; color:white; font-weight:bold; border-radius:4px; min-height:36px; }"
-          "QPushButton:hover { background:#a00; }"
-        : "QPushButton { background:#090; color:white; font-weight:bold; border-radius:4px; min-height:36px; }"
-          "QPushButton:hover { background:#070; }");
     m_portConfig->setParameterFieldsEnabled(!connected);
     m_statusLabel->setText(connected
         ? QString("已连接 %1").arg(m_serial->portName())
         : "未连接");
-    m_statusLabel->setStyleSheet(connected ? "color:#0c0;" : "color:#888;");
+    applyThemeStyles();
+}
+
+void SerialTerminalWidget::onThemeChanged()
+{
+    applyThemeStyles();
+}
+
+void SerialTerminalWidget::applyThemeStyles()
+{
+    auto &t = ThemeManager::instance();
+    m_terminal->setStyleSheet(t.styleLogView(true));
+    m_portConfig->connectButton()->setStyleSheet(
+        m_connected ? t.styleDangerButton(36) : t.styleSuccessButton(36));
+    m_statusLabel->setStyleSheet(
+        m_connected ? t.styleSuccessText() : t.styleMutedText());
 }
 
 void SerialTerminalWidget::onDataReceived(const QByteArray &data)

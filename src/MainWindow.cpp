@@ -2,6 +2,7 @@
 #include "SerialManager.h"
 #include "SerialDebugWidget.h"
 #include "SerialTerminalWidget.h"
+#include "ThemeManager.h"
 
 #include <QTabWidget>
 #include <QStatusBar>
@@ -10,10 +11,11 @@
 #include <QApplication>
 #include <QIcon>
 #include <QStyle>
+#include <QMenuBar>
+#include <QMenu>
 
 namespace {
 
-/** 优先使用系统图标主题（常见于 Linux），否则用 Qt 标准像素图，避免依赖 Emoji 字体。 */
 QIcon tabIconThemed(const QString &iconName, QStyle::StandardPixmap fallback)
 {
     QIcon themed = QIcon::fromTheme(iconName);
@@ -33,11 +35,19 @@ MainWindow::MainWindow(QWidget *parent)
     setMinimumSize(900, 600);
     resize(1100, 700);
 
+    setupMenu();
     setupUi();
     setupConnections();
+    refreshStatusStyle();
 }
 
 MainWindow::~MainWindow() = default;
+
+void MainWindow::setupMenu()
+{
+    auto *viewMenu = menuBar()->addMenu(tr("视图"));
+    ThemeManager::instance().installMenu(viewMenu);
+}
 
 void MainWindow::setupUi()
 {
@@ -54,8 +64,7 @@ void MainWindow::setupUi()
                         tr("串口终端"));
     setCentralWidget(m_tabWidget);
 
-    // Status bar
-    m_statusLabel = new QLabel("就绪");
+    m_statusLabel = new QLabel(tr("就绪"));
     statusBar()->addWidget(m_statusLabel);
 }
 
@@ -66,14 +75,38 @@ void MainWindow::setupConnections()
     connect(m_serial, &SerialManager::portOpened,    this, &MainWindow::onPortOpened);
     connect(m_serial, &SerialManager::portClosed,    this, &MainWindow::onPortClosed);
     connect(m_tabWidget, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
+    connect(&ThemeManager::instance(), &ThemeManager::themeChanged,
+            this, &MainWindow::onThemeChanged);
+}
+
+void MainWindow::onThemeChanged()
+{
+    refreshStatusStyle();
+}
+
+void MainWindow::refreshStatusStyle()
+{
+    auto &t = ThemeManager::instance();
+    switch (m_statusKind) {
+    case StatusKind::Connected:
+        m_statusLabel->setStyleSheet(t.styleSuccessText());
+        break;
+    case StatusKind::Error:
+        m_statusLabel->setStyleSheet(t.styleDangerText());
+        break;
+    case StatusKind::Disconnected:
+    case StatusKind::Ready:
+    default:
+        m_statusLabel->setStyleSheet(t.styleMutedText());
+        break;
+    }
 }
 
 void MainWindow::onTabChanged(int index)
 {
-    // If switching tabs while port is open, warn user
     if (m_serial->isOpen() && index != m_prevTabIndex) {
-        QMessageBox::information(this, "提示",
-            "切换模式前请先关闭串口连接。");
+        QMessageBox::information(this, tr("提示"),
+            tr("切换模式前请先关闭串口连接。"));
         m_tabWidget->setCurrentIndex(m_prevTabIndex);
         return;
     }
@@ -91,18 +124,21 @@ void MainWindow::onDataReceived(const QByteArray &data)
 
 void MainWindow::onSerialError(const QString &error)
 {
-    m_statusLabel->setText("错误: " + error);
-    m_statusLabel->setStyleSheet("color:red;");
+    m_statusLabel->setText(tr("错误: %1").arg(error));
+    m_statusKind = StatusKind::Error;
+    refreshStatusStyle();
 }
 
 void MainWindow::onPortOpened()
 {
-    m_statusLabel->setText(QString("已连接: %1").arg(m_serial->portName()));
-    m_statusLabel->setStyleSheet("color:green;");
+    m_statusLabel->setText(tr("已连接: %1").arg(m_serial->portName()));
+    m_statusKind = StatusKind::Connected;
+    refreshStatusStyle();
 }
 
 void MainWindow::onPortClosed()
 {
-    m_statusLabel->setText("已断开");
-    m_statusLabel->setStyleSheet("color:#555;");
+    m_statusLabel->setText(tr("已断开"));
+    m_statusKind = StatusKind::Disconnected;
+    refreshStatusStyle();
 }

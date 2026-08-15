@@ -29,32 +29,27 @@ private slots:
     void onClearScreen();
     void onRefreshPorts();
     void applyConnectedState(bool connected);
+    void onThemeChanged();
 
 private:
     void setupUi();
     void setupConnections();
+    void applyThemeStyles();
     void processVT100(const QByteArray &data);
     void sendBytes(const QByteArray &data);
 
-    // Override key events via event filter on terminal widget
     bool eventFilter(QObject *obj, QEvent *event) override;
 
     SerialManager *m_serial;
-
-    // Left: terminal display
     QTextEdit *m_terminal;
-
     SerialPortConfigGroup *m_portConfig = nullptr;
 
-    // Terminal options
     QCheckBox *m_localEchoCheck;
-    QCheckBox *m_crlfCheck;       // append \r\n on Enter
+    QCheckBox *m_crlfCheck;
     QPushButton *m_clearBtn;
-
-    // Status
     QLabel *m_statusLabel;
 
-    // VT100 escape sequence buffer
     QString m_escBuffer;
     bool m_inEscape = false;
+    bool m_connected = false;
 };
