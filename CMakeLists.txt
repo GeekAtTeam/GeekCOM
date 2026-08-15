@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(GeekCOM VERSION 1.0.0 LANGUAGES CXX)
+project(GeekCOM VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -49,6 +49,11 @@ target_link_libraries(GeekCOM PRIVATE
     Qt6::Core
     Qt6::Widgets
     Qt6::SerialPort
+)
+
+# 唯一版本来源：project(... VERSION ...) → APP_VERSION
+target_compile_definitions(GeekCOM PRIVATE
+    "APP_VERSION=\"${PROJECT_VERSION}\""
 )
 
 # macOS bundle + Dock / Finder 图标（构建机需有 iconutil，通常仅在 macOS 上可用）

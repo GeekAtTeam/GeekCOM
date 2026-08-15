@@ -30,7 +30,8 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , m_serial(new SerialManager(this))
 {
-    setWindowTitle("GeekCOM - 串口调试工具 v1.0");
+    setWindowTitle(tr("GeekCOM - 串口调试工具 v%1")
+                       .arg(QCoreApplication::applicationVersion()));
     setWindowIcon(QIcon(QStringLiteral(":/icons/logo.png")));
     setMinimumSize(900, 600);
     resize(1100, 700);

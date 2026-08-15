@@ -5,13 +5,17 @@
 #include <QColor>
 #include "ThemeManager.h"
 
+#ifndef APP_VERSION
+#  define APP_VERSION "0.0.0"
+#endif
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     // 须尽早设置，与 geekcom.desktop basename 一致（Wayland 下作为 app-id）
     QGuiApplication::setDesktopFileName(QStringLiteral("geekcom"));
     app.setApplicationName(QStringLiteral("GeekCOM"));
-    app.setApplicationVersion("1.0.0");
+    app.setApplicationVersion(QStringLiteral(APP_VERSION));
     app.setOrganizationName(QStringLiteral("GeekCOM"));
     // GNOME / Ubuntu Dock：与 .desktop 关联后任务栏使用 Icon=
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/logo.png")));
