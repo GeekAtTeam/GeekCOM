@@ -1,5 +1,7 @@
 # GeekCOM - 串口调试工具
 
+![](./docs/images/GeekCOM_banner.png)
+
 跨平台串口调试工具，基于 Qt6 + C++ Widget，支持 Windows / macOS / Linux。
 
 ## 功能特性
