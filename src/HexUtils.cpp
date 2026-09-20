@@ -1,4 +1,5 @@
 #include "HexUtils.h"
+#include <QRegularExpression>
 
 namespace HexUtils {
 
@@ -14,25 +15,19 @@ QString toHexString(const QByteArray &data)
     return result;
 }
 
-QByteArray fromHexString(const QString &hex, bool *ok)
+QByteArray fromHexString(const QString &hex, bool *ok, QString *error)
 {
-    QString clean = hex.simplified().remove(' ');
-    // Pad odd length
-    if (clean.length() % 2 != 0) clean = '0' + clean;
-
-    QByteArray result;
-    result.reserve(clean.length() / 2);
-    for (int i = 0; i < clean.length(); i += 2) {
-        bool byteOk = false;
-        quint8 byte = clean.mid(i, 2).toUInt(&byteOk, 16);
-        if (!byteOk) {
-            if (ok) *ok = false;
-            return {};
-        }
-        result.append((char)byte);
+    if (ok) *ok = false;
+    if (error) error->clear();
+    const QString clean = hex.trimmed();
+    static const QRegularExpression valid(
+        QStringLiteral("^(?:[0-9A-Fa-f]{2})+$|^[0-9A-Fa-f]{2}(?:\\s+[0-9A-Fa-f]{2})+$"));
+    if (!clean.isEmpty() && !valid.match(clean).hasMatch()) {
+        if (error) *error = QStringLiteral("HEX 必须为完整字节对，例如 01 23 或 0123；不能包含单个半字节或非十六进制字符。");
+        return {};
     }
     if (ok) *ok = true;
-    return result;
+    return QByteArray::fromHex(clean.toLatin1());
 }
 
 bool isValidHex(const QString &text)

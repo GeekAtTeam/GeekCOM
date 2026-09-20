@@ -17,6 +17,7 @@
 #include <QSerialPort>
 #include <QFrame>
 #include <QMessageBox>
+#include <QSignalBlocker>
 
 SerialTerminalWidget::SerialTerminalWidget(SerialManager *serial, QWidget *parent)
     : QWidget(parent)
@@ -24,7 +25,7 @@ SerialTerminalWidget::SerialTerminalWidget(SerialManager *serial, QWidget *paren
 {
     setupUi();
     setupConnections();
-    applyConnectedState(false);
+    applyConnectedState(m_serial->isOpen());
     applyThemeStyles();
     connect(&ThemeManager::instance(), &ThemeManager::themeChanged,
             this, &SerialTerminalWidget::onThemeChanged);
@@ -81,6 +82,8 @@ void SerialTerminalWidget::setupUi()
 
 void SerialTerminalWidget::setupConnections()
 {
+    connect(m_serial, &SerialManager::portOpened, this, [this] { applyConnectedState(true); });
+    connect(m_serial, &SerialManager::portClosed, this, [this] { applyConnectedState(false); });
     connect(m_portConfig->connectButton(), &QPushButton::toggled, this, &SerialTerminalWidget::onToggleConnection);
     connect(m_clearBtn, &QPushButton::clicked, this, &SerialTerminalWidget::onClearScreen);
     connect(m_portConfig->refreshPortButton(), &QPushButton::clicked, this, &SerialTerminalWidget::onRefreshPorts);
@@ -96,8 +99,8 @@ void SerialTerminalWidget::onToggleConnection()
         auto stopBits = (QSerialPort::StopBits) m_portConfig->stopBitsCombo()->currentData().toInt();
 
         if (!m_serial->open(port, baud, dataBits, parity, stopBits)) {
-            m_portConfig->connectButton()->setChecked(false);
-            QMessageBox::warning(this, "连接失败", "无法打开串口，请检查端口设置。");
+            applyConnectedState(false);
+            m_statusLabel->setText("连接失败: " + m_serial->lastError());
             return;
         }
         applyConnectedState(true);
@@ -111,6 +114,8 @@ void SerialTerminalWidget::onToggleConnection()
 void SerialTerminalWidget::applyConnectedState(bool connected)
 {
     m_connected = connected;
+    const QSignalBlocker blocker(m_portConfig->connectButton());
+    m_portConfig->connectButton()->setChecked(connected);
     m_portConfig->connectButton()->setText(connected ? "关闭串口" : "打开串口");
     m_portConfig->setParameterFieldsEnabled(!connected);
     m_statusLabel->setText(connected
@@ -185,10 +190,11 @@ void SerialTerminalWidget::processVT100(const QByteArray &data)
 void SerialTerminalWidget::sendBytes(const QByteArray &data)
 {
     if (!m_serial->isOpen()) return;
-    m_serial->write(data);
-    if (m_localEchoCheck->isChecked()) {
-        processVT100(data);
-    }
+    const qint64 accepted = m_serial->write(data);
+    if (accepted != data.size())
+        m_statusLabel->setText("发送失败: " + m_serial->lastError());
+    if (m_localEchoCheck->isChecked() && accepted > 0)
+        processVT100(data.left(accepted));
 }
 
 bool SerialTerminalWidget::eventFilter(QObject *obj, QEvent *event)

@@ -24,6 +24,7 @@
 #include <QMessageBox>
 #include <QSerialPort>
 #include <QFrame>
+#include <QSignalBlocker>
 
 SerialDebugWidget::SerialDebugWidget(SerialManager *serial, QWidget *parent)
     : QWidget(parent)
@@ -32,7 +33,7 @@ SerialDebugWidget::SerialDebugWidget(SerialManager *serial, QWidget *parent)
 {
     setupUi();
     setupConnections();
-    applyConnectedState(false);
+    applyConnectedState(m_serial->isOpen());
     applyThemeStyles();
     connect(&ThemeManager::instance(), &ThemeManager::themeChanged,
             this, &SerialDebugWidget::onThemeChanged);
@@ -75,6 +76,7 @@ void SerialDebugWidget::setupUi()
     txLayout->setSpacing(6);
 
     m_txHexCheck = new QCheckBox("十六进制发送");
+    m_txHexCheck->setObjectName("sendHex");
     txLayout->addWidget(m_txHexCheck, 0, 0, 1, 2);
 
     txLayout->addWidget(new QLabel("文件:"), 1, 0);
@@ -90,6 +92,7 @@ void SerialDebugWidget::setupUi()
     txLayout->addLayout(fileRow, 2, 0, 1, 2);
 
     m_autoSendCheck = new QCheckBox("自动发送");
+    m_autoSendCheck->setObjectName("autoSend");
     m_autoSendIntervalSpin = new QSpinBox;
     m_autoSendIntervalSpin->setRange(100, 60000);
     m_autoSendIntervalSpin->setValue(1000);
@@ -132,6 +135,7 @@ void SerialDebugWidget::setupUi()
     txVBox->setSpacing(4);
     m_txTitle = new QLabel("发送区");
     m_sendEdit = new QTextEdit;
+    m_sendEdit->setObjectName("sendEditor");
     m_sendEdit->setFont(QFont("Courier New", 10));
     m_sendEdit->setPlaceholderText("输入要发送的数据...");
     m_sendEdit->setMaximumHeight(120);
@@ -139,6 +143,20 @@ void SerialDebugWidget::setupUi()
     m_sendBtn->setFixedHeight(36);
     txVBox->addWidget(m_txTitle);
     txVBox->addWidget(m_sendEdit);
+    m_lineEndingCombo = new QComboBox;
+    m_lineEndingCombo->setObjectName("lineEnding");
+    m_lineEndingCombo->addItem("无行尾", QByteArray());
+    m_lineEndingCombo->addItem("LF", QByteArray("\n"));
+    m_lineEndingCombo->addItem("CR", QByteArray("\r"));
+    m_lineEndingCombo->addItem("CRLF", QByteArray("\r\n"));
+    m_sendPreview = new QLabel;
+    m_sendPreview->setObjectName("sendPreview");
+    m_sendPreview->setWordWrap(true);
+    m_sendResult = new QLabel;
+    m_sendResult->setWordWrap(true);
+    txVBox->addWidget(m_lineEndingCombo);
+    txVBox->addWidget(m_sendPreview);
+    txVBox->addWidget(m_sendResult);
     txVBox->addWidget(m_sendBtn);
     splitter->addWidget(txWidget);
 
@@ -159,7 +177,7 @@ void SerialDebugWidget::setupUi()
     m_countClearBtn = new QPushButton("计数清零");
     m_countClearBtn->setFlat(true);
 
-    m_autoSendLabel = new QLabel("自动发送:");
+    m_autoSendLabel = new QLabel("周期已提交次数:");
     m_autoSendCountSpin = new QSpinBox;
     m_autoSendCountSpin->setRange(0, 99999);
     m_autoSendCountSpin->setValue(0);
@@ -207,6 +225,16 @@ void SerialDebugWidget::setupConnections()
 
     connect(m_autoSendTimer, &QTimer::timeout, this, &SerialDebugWidget::onSend);
 
+    connect(m_serial, &SerialManager::portOpened, this, [this] { applyConnectedState(true); });
+    connect(m_serial, &SerialManager::portClosed, this, [this] { applyConnectedState(false); });
+    connect(m_serial, &SerialManager::errorOccurred, this, [this](const QString &error) {
+        m_autoSendCheck->setChecked(false);
+        m_sendResult->setText("错误: " + error);
+    });
+    connect(m_sendEdit, &QTextEdit::textChanged, this, &SerialDebugWidget::updateSendPreview);
+    connect(m_txHexCheck, &QCheckBox::toggled, this, &SerialDebugWidget::updateSendPreview);
+    connect(m_lineEndingCombo, &QComboBox::currentIndexChanged, this, &SerialDebugWidget::updateSendPreview);
+
     // Update status bar periodically
     auto *statusTimer = new QTimer(this);
     connect(statusTimer, &QTimer::timeout, this, &SerialDebugWidget::updateStatusBar);
@@ -223,8 +251,8 @@ void SerialDebugWidget::onToggleConnection()
         auto stopBits = (QSerialPort::StopBits) m_portConfig->stopBitsCombo()->currentData().toInt();
 
         if (!m_serial->open(port, baud, dataBits, parity, stopBits)) {
-            m_portConfig->connectButton()->setChecked(false);
-            QMessageBox::warning(this, "连接失败", m_serial->isOpen() ? "" : "无法打开串口，请检查端口设置。");
+            applyConnectedState(false);
+            m_sendResult->setText("连接失败: " + m_serial->lastError());
             return;
         }
         applyConnectedState(true);
@@ -239,8 +267,14 @@ void SerialDebugWidget::onToggleConnection()
 void SerialDebugWidget::applyConnectedState(bool connected)
 {
     m_connected = connected;
+    const QSignalBlocker blocker(m_portConfig->connectButton());
+    m_portConfig->connectButton()->setChecked(connected);
+    if (!connected) {
+        m_autoSendTimer->stop();
+        m_autoSendCheck->setChecked(false);
+    }
     m_portConfig->connectButton()->setText(connected ? "关闭串口" : "打开串口");
-    m_sendBtn->setEnabled(connected);
+    updateSendPreview();
     m_sendFileBtn->setEnabled(connected);
     m_portConfig->setParameterFieldsEnabled(!connected);
     applyThemeStyles();
@@ -296,26 +330,50 @@ void SerialDebugWidget::appendToReceive(const QByteArray &data)
     m_receiveEdit->verticalScrollBar()->setValue(m_receiveEdit->verticalScrollBar()->maximum());
 }
 
-QByteArray SerialDebugWidget::buildSendData() const
+QByteArray SerialDebugWidget::buildSendData(QString *error) const
 {
     QString text = m_sendEdit->toPlainText();
     if (m_txHexCheck->isChecked()) {
         bool ok;
-        QByteArray data = HexUtils::fromHexString(text, &ok);
+        QByteArray data = HexUtils::fromHexString(text, &ok, error);
         if (!ok) return {};
         return data;
     }
-    return text.toUtf8();
+    return text.toUtf8() + m_lineEndingCombo->currentData().toByteArray();
+}
+
+void SerialDebugWidget::updateSendPreview()
+{
+    QString error;
+    const QByteArray data = buildSendData(&error);
+    m_lineEndingCombo->setEnabled(!m_txHexCheck->isChecked() && !m_autoSendTimer->isActive());
+    m_sendPreview->setText(error.isEmpty()
+        ? QString("%1 字节 · %2%3").arg(data.size()).arg(HexUtils::toHexString(data.left(64)),
+            data.size() > 64 ? " …（预览前 64 字节）" : "") : error);
+    const bool canSend = m_serial->isOpen() && error.isEmpty() && !data.isEmpty();
+    m_sendBtn->setEnabled(canSend && !m_autoSendTimer->isActive());
+    m_autoSendCheck->setEnabled(canSend || m_autoSendTimer->isActive());
 }
 
 void SerialDebugWidget::onSend()
 {
-    QByteArray data = buildSendData();
-    if (data.isEmpty()) return;
-    m_serial->write(data);
-    if (m_autoSendCheck->isChecked()) {
-        m_autoSendCountSpin->setValue(m_autoSendCountSpin->value() + 1);
+    QString error;
+    const QByteArray data = buildSendData(&error);
+    if (!error.isEmpty() || data.isEmpty()) {
+        m_autoSendCheck->setChecked(false);
+        m_sendResult->setText(error.isEmpty() ? "没有可发送的数据" : error);
+        return;
     }
+    const qint64 accepted = m_serial->write(data);
+    if (accepted != data.size()) {
+        m_autoSendCheck->setChecked(false);
+        m_sendResult->setText("发送失败: " + m_serial->lastError());
+        return;
+    }
+    m_sendResult->setText(QString("已提交 %1 字节（不代表设备已收到）").arg(accepted));
+    if (m_autoSendCheck->isChecked())
+        m_autoSendCountSpin->setValue(m_autoSendCountSpin->value() + 1);
+    updateStatusBar();
 }
 
 void SerialDebugWidget::onClearReceive()
@@ -356,17 +414,29 @@ void SerialDebugWidget::onSendFile()
     }
     QByteArray data = f.readAll();
     f.close();
-    m_serial->write(data);
+    const qint64 accepted = m_serial->write(data);
+    m_sendResult->setText(accepted == data.size()
+        ? QString("文件已提交 %1 字节（不代表设备已收到）").arg(accepted)
+        : "文件发送失败: " + m_serial->lastError());
 }
 
 void SerialDebugWidget::onAutoSendToggle(bool checked)
 {
+    if (checked && (!m_serial->isOpen() || buildSendData().isEmpty())) {
+        m_autoSendCheck->setChecked(false);
+        return;
+    }
     if (checked) {
         m_autoSendCountSpin->setValue(0);
         m_autoSendTimer->start(m_autoSendIntervalSpin->value());
     } else {
         m_autoSendTimer->stop();
     }
+    m_sendEdit->setReadOnly(checked);
+    m_txHexCheck->setEnabled(!checked);
+    m_autoSendIntervalSpin->setEnabled(!checked);
+    m_sendFileBtn->setEnabled(m_serial->isOpen() && !checked);
+    updateSendPreview();
 }
 
 void SerialDebugWidget::onCountClear()
@@ -389,5 +459,5 @@ void SerialDebugWidget::onRefreshPorts()
 void SerialDebugWidget::updateStatusBar()
 {
     m_rxLabel->setText(QString("RX: %1 bytes").arg(m_serial->rxBytes()));
-    m_txLabel->setText(QString("TX: %1 bytes").arg(m_serial->txBytes()));
+    m_txLabel->setText(QString("TX 已提交: %1 bytes").arg(m_serial->txBytes()));
 }

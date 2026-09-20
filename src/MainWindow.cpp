@@ -141,6 +141,10 @@ void MainWindow::onPortOpened()
 
 void MainWindow::onPortClosed()
 {
+    if (m_statusKind == StatusKind::Error) {
+        m_statusLabel->setText(tr("已断开 · 错误: %1").arg(m_serial->lastError()));
+        return;
+    }
     m_statusLabel->setText(tr("已断开"));
     m_statusKind = StatusKind::Disconnected;
     refreshStatusStyle();

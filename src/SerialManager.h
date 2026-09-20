@@ -19,6 +19,7 @@ public:
     void close();
     bool isOpen() const;
     QString portName() const;
+    QString lastError() const { return m_lastError; }
 
     // Data transfer
     qint64 write(const QByteArray &data);
@@ -45,4 +46,5 @@ private:
     QSerialPort *m_port;
     quint64 m_rxBytes = 0;
     quint64 m_txBytes = 0;
+    QString m_lastError;
 };

@@ -39,6 +39,7 @@ private slots:
     void onRefreshPorts();
     void updateStatusBar();
     void onThemeChanged();
+    void updateSendPreview();
 
 private:
     void setupUi();
@@ -46,7 +47,7 @@ private:
     void appendToReceive(const QByteArray &data);
     void applyConnectedState(bool connected);
     void applyThemeStyles();
-    QByteArray buildSendData() const;
+    QByteArray buildSendData(QString *error = nullptr) const;
 
     SerialManager *m_serial;
     SerialPortConfigGroup *m_portConfig = nullptr;
@@ -64,6 +65,9 @@ private:
     QTextEdit *m_sendEdit;
 
     QCheckBox *m_txHexCheck;
+    QComboBox *m_lineEndingCombo;
+    QLabel *m_sendPreview;
+    QLabel *m_sendResult;
     QLineEdit *m_filePathEdit;
     QPushButton *m_chooseFileBtn;
     QPushButton *m_sendFileBtn;

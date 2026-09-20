@@ -56,6 +56,22 @@ target_compile_definitions(GeekCOM PRIVATE
     "APP_VERSION=\"${PROJECT_VERSION}\""
 )
 
+option(GEEKCOM_BUILD_TESTS "Build serial regression tests" OFF)
+if(GEEKCOM_BUILD_TESTS)
+    enable_testing()
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    add_executable(GeekCOMTests
+        tests/SerialTests.cpp
+        src/HexUtils.cpp src/SerialManager.cpp src/SerialDebugWidget.cpp
+        src/SerialTerminalWidget.cpp src/SerialPortConfigGroup.cpp
+        src/ThemeManager.cpp src/MainWindow.cpp
+    )
+    target_include_directories(GeekCOMTests PRIVATE src)
+    target_link_libraries(GeekCOMTests PRIVATE Qt6::Test Qt6::Widgets Qt6::SerialPort)
+    add_test(NAME serial_regressions COMMAND GeekCOMTests)
+    set_tests_properties(serial_regressions PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()
+
 # macOS bundle + Dock / Finder 图标（构建机需有 iconutil，通常仅在 macOS 上可用）
 if(APPLE)
     set_target_properties(GeekCOM PROPERTIES

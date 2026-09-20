@@ -20,17 +20,21 @@ bool SerialManager::open(const QString &portName,
                          QSerialPort::Parity parity,
                          QSerialPort::StopBits stopBits)
 {
-    if (m_port->isOpen()) m_port->close();
+    close();
+    m_lastError.clear();
 
     m_port->setPortName(portName);
-    m_port->setBaudRate(baudRate);
-    m_port->setDataBits(dataBits);
-    m_port->setParity(parity);
-    m_port->setStopBits(stopBits);
-    m_port->setFlowControl(QSerialPort::NoFlowControl);
+    if (!m_port->setBaudRate(baudRate) || !m_port->setDataBits(dataBits)
+        || !m_port->setParity(parity) || !m_port->setStopBits(stopBits)
+        || !m_port->setFlowControl(QSerialPort::NoFlowControl)) {
+        m_lastError = m_port->errorString();
+        emit errorOccurred(m_lastError);
+        return false;
+    }
 
     if (!m_port->open(QIODevice::ReadWrite)) {
-        emit errorOccurred(m_port->errorString());
+        m_lastError = m_port->errorString();
+        emit errorOccurred(m_lastError);
         return false;
     }
     resetStats();
@@ -58,9 +62,18 @@ QString SerialManager::portName() const
 
 qint64 SerialManager::write(const QByteArray &data)
 {
-    if (!m_port->isOpen()) return -1;
+    if (!m_port->isOpen()) {
+        m_lastError = tr("串口未连接，数据未提交。");
+        emit errorOccurred(m_lastError);
+        return -1;
+    }
     qint64 written = m_port->write(data);
     if (written > 0) m_txBytes += written;
+    if (written != data.size()) {
+        m_lastError = written < 0 ? m_port->errorString()
+            : tr("仅提交 %1 / %2 字节；请检查连接，不会自动重发。").arg(written).arg(data.size());
+        emit errorOccurred(m_lastError);
+    }
     return written;
 }
 
@@ -91,7 +104,8 @@ void SerialManager::onReadyRead()
 void SerialManager::onErrorOccurred(QSerialPort::SerialPortError error)
 {
     if (error != QSerialPort::NoError) {
-        emit errorOccurred(m_port->errorString());
+        m_lastError = m_port->errorString();
+        emit errorOccurred(m_lastError);
         if (error == QSerialPort::ResourceError) {
             close();
         }
