@@ -2,7 +2,73 @@
 
 ![](./docs/images/GeekCOM_banner.png)
 
-跨平台串口调试工具，基于 Qt6 + C++ Widget，支持 Windows / macOS / Linux。
+跨平台串口调试工具。`feat/tauri-react-rust` 分支新增 **Tauri 2 + React + Rust** 桌面实现，用 GeekCOM 验证新技术栈；原 Qt6 / C++ 实现保留用于对照。
+
+## Tauri 版本（当前分支）
+
+已迁移串口配置、文本 / HEX 收发、行尾与发送预览、接收保存、文件与周期发送、计数、交互终端和主题；新增可隐藏的左侧配置、工具栏以及 HEX / ASCII 对照视图。
+
+```bash
+# Ubuntu 24.04：先安装 Node.js 22.12+、Rust stable，再安装桌面开发依赖
+sudo apt install build-essential pkg-config libudev-dev libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+npm ci
+npm run tauri dev
+
+# Linux 安装包
+npm run tauri build -- --bundles deb
+```
+
+`npm run dev` 仅启动浏览器预览，实际串口和文件操作需要 Tauri 桌面进程。Windows / macOS 的系统准备参见 [Tauri 官方说明](https://v2.tauri.app/start/prerequisites/)。本次完成 Linux 桌面验证，其他平台仍需原生构建与设备测试。
+
+### 配色方案
+
+配色以 `ui/src/styles.css` 的 CSS 变量为准。深色和浅色主题共用品牌主色，日志区与终端保持深色。
+
+| 品牌色 Token | 色值 | 用途 |
+| --- | --- | --- |
+| `--accent` | `#E85552` | Logo 底色、主按钮、品牌文字、选中态、焦点边框、复选框及终端光标 |
+| `--accent-hover` | `#D94B48` | 主按钮悬停 |
+| `--accent-active` | `#C6413E` | 主按钮按下 |
+
+主按钮使用白色文字；禁用按钮不透明度为 `0.38`。已连接时的断开按钮使用中性色，连接状态由绿色指示灯表达。
+
+| 界面 Token | 深色主题 | 浅色主题 |
+| --- | --- | --- |
+| `--bg` 页面背景 | `#171A20` | `#F3F5F7` |
+| `--panel` 面板 | `#1D2128` | `#FFFFFF` |
+| `--raised` 凸起区域 | `#252A33` | `#EDF0F4` |
+| `--field` 输入区域 | `#181C23` | `#F7F8FA` |
+| `--border` 边框 | `#303640` | `#DBE0E7` |
+| `--text` 正文 | `#D9DFE7` | `#253140` |
+| `--muted` 次要文字 | `#87929F` | `#637185` |
+| `--hover` 中性色悬停背景 | `#2B313C` | `#E5EAF0` |
+
+| 固定配色 | 色值 |
+| --- | --- |
+| 日志与终端背景 | `#111419` |
+| 接收日志文字 | `#D5DEE8` |
+| 终端文字 | `#D7E0E9` |
+| 终端选区 | `#374555` |
+| 已连接指示灯 | `#58BC97` |
+| 未连接指示灯 | `#687482` |
+
+主题入口位于右上角，可选跟随系统、浅色、深色，偏好保存在本地。终端光标从 CSS 主色读取，避免单独维护另一套品牌色。
+
+### Logo 与 Ubuntu 本地安装
+
+- `resources/GeekCOM_Logo.svg`：设计源文件，用于生成各平台应用图标。
+- `resources/GeekCOM_Logo.png`：同版 PNG，用于界面左上角，避免该 SVG 在 Ubuntu WebKit 中的小尺寸渲染异常；显示尺寸固定为 27×27，禁止 flex 压缩。
+- 更新设计时应同步这两份素材，再重新生成 `src-tauri/icons/` 中的图标。
+
+```bash
+npm run tauri icon -- resources/GeekCOM_Logo.svg
+npm run tauri build -- --debug --bundles deb
+bash packaging/linux/install-tauri-local.sh
+```
+
+本地安装脚本将程序安装到 `~/.local/bin/geekcom`，备份并更新用户级 `geekcom.desktop`。图标以内容哈希命名并使用绝对路径，避免同名旧图标和缓存干扰。重新打开应用后生效；旧 Qt 二进制保留，原启动入口备份在 `~/.local/share/geekcom-tauri/`。
+
+以下章节描述保留的 **Qt 版本**。
 
 ## 功能特性
 
@@ -49,7 +115,7 @@ MainWindow
 `SerialManager` 是唯一的串口操作对象，两个模式 Widget 共享同一实例，
 MainWindow 负责将 `dataReceived` 信号路由给当前激活的 Widget。
 
-## 外观与主题
+## 外观与主题（Qt 版本）
 
 由 `ThemeManager` 统一管理，菜单 **视图 → 外观**：
 

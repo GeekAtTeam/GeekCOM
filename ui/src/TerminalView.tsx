@@ -31,7 +31,9 @@ export const TerminalView = forwardRef<
       theme: {
         background: "#111419",
         foreground: "#d7e0e9",
-        cursor: "#ee6b67",
+        cursor: getComputedStyle(document.documentElement)
+          .getPropertyValue("--accent")
+          .trim(),
         selectionBackground: "#374555",
       },
     });

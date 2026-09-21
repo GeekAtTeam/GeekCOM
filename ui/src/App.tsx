@@ -1,3 +1,4 @@
+import appLogo from "../../resources/GeekCOM_Logo.png";
 import {
   useCallback,
   useEffect,
@@ -279,7 +280,7 @@ export default function App() {
       <header className="menubar">
         <div className="wordmark">
           <span className="brand-icon">
-            <Cable size={17} />
+            <img src={appLogo} alt="" width={27} height={27} />
           </span>
           Geek<span>COM</span>
           <small>WORKBENCH</small>
