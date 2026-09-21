@@ -44,6 +44,10 @@ export const emptyStatus: Status = {
   error: null,
   dropped: 0,
 };
+const statusKeys = Object.keys(emptyStatus) as (keyof Status)[];
+export const sameStatus = (a: Status, b: Status) =>
+  statusKeys.every((key) => a[key] === b[key]);
+
 export const rates = [
   1200, 2400, 4800, 9600, 19200, 38400, 57600, 100000, 115200, 230400, 460800,
   921600, 1500000,

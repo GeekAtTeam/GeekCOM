@@ -31,15 +31,15 @@ import {
 } from "lucide-react";
 import { TerminalView, type TerminalHandle } from "./TerminalView";
 import { PortComboBox } from "./PortComboBox";
+import { LogRows } from "./LogRows";
 import {
   appendRows,
-  ascii,
   emptyStatus,
   exportText,
   hex,
   rates,
+  sameStatus,
   terminalInput,
-  time,
   type Batch,
   type Config,
   type LogRow,
@@ -179,6 +179,8 @@ export default function App() {
     if (!desktop) return;
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
+    let published = live.current.status;
+    let publishedAt = 0;
     const tick = async () => {
       const epoch = inputEpoch.current;
       try {
@@ -190,13 +192,36 @@ export default function App() {
           epoch !== inputEpoch.current
         )
           return;
-        setStatus(batch.status);
+        const now = performance.now();
+        const next = batch.status;
+        const urgent =
+          next.connected !== published.connected ||
+          next.session !== published.session ||
+          next.port !== published.port ||
+          next.error !== published.error ||
+          next.autoRunning !== published.autoRunning ||
+          next.fileRunning !== published.fileRunning ||
+          next.fileSize !== published.fileSize ||
+          next.dropped !== published.dropped;
+        // Counters do not need to re-render the workbench at the receive rate.
+        // Connection, errors and task transitions always bypass this throttle.
+        if (
+          !sameStatus(published, next) &&
+          (urgent || now - publishedAt >= 100)
+        ) {
+          published = next;
+          publishedAt = now;
+          setStatus((previous) =>
+            sameStatus(previous, next) ? previous : next,
+          );
+        }
         live.current.status = batch.status;
         if (!batch.status.connected) {
           setPaused(false);
           return;
         }
         const incoming: LogRow[] = [];
+        const terminalChunks: Uint8Array[] = [];
         for (const e of batch.events) {
           if (e.direction === "RX" && e.session === batch.status.session) {
             if (decoderSession.current !== e.session) {
@@ -204,7 +229,7 @@ export default function App() {
               decoderSession.current = e.session;
             }
             if (live.current.mode === "terminal") {
-              terminal.current?.write(new Uint8Array(e.data));
+              terminalChunks.push(new Uint8Array(e.data));
             } else
               incoming.push({
                 ...e,
@@ -213,6 +238,21 @@ export default function App() {
                 }),
               });
           }
+        }
+        // xterm parses asynchronously. Submit one ordered chunk per poll batch
+        // instead of scheduling a separate write for every OS read block.
+        if (terminalChunks.length === 1)
+          terminal.current?.write(terminalChunks[0]);
+        else if (terminalChunks.length > 1) {
+          const bytes = new Uint8Array(
+            terminalChunks.reduce((n, chunk) => n + chunk.length, 0),
+          );
+          let offset = 0;
+          for (const chunk of terminalChunks) {
+            bytes.set(chunk, offset);
+            offset += chunk.length;
+          }
+          terminal.current?.write(bytes);
         }
         if (incoming.length)
           setRows((old) =>
@@ -228,7 +268,17 @@ export default function App() {
         )
           setMessage(String(e));
       } finally {
-        if (!disposed) timer = setTimeout(tick, 40);
+        // Keep one request in flight; disconnected windows do not need a
+        // frame-rate poll. Unchanged status snapshots do not re-render App.
+        if (!disposed)
+          timer = setTimeout(
+            tick,
+            !live.current.status.connected
+              ? 100
+              : live.current.mode === "terminal"
+                ? 16
+                : 32,
+          );
       }
     };
     timer = setTimeout(tick, 0);
@@ -237,10 +287,6 @@ export default function App() {
       clearTimeout(timer);
     };
   }, [desktop]);
-  useEffect(() => {
-    if (status.connected && !paused && log.current)
-      log.current.scrollTop = log.current.scrollHeight;
-  }, [rows, paused, view, status.connected]);
   useEffect(() => {
     if (!desktop) return;
     let cancelled = false;
@@ -686,26 +732,16 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                rows.map((r) => (
-                  <div
-                    className={
-                      selected === r.id ? "log-row highlighted" : "log-row"
-                    }
-                    key={r.id}
-                    onClick={() => setSelected(r.id)}
-                  >
-                    {timestamps && (
-                      <span className="timestamp">{time(r.timestamp)}</span>
-                    )}
-                    <span className="direction">RX</span>
-                    <span className="row-content">
-                      {view === "text" ? r.text || "" : hex(r.data)}
-                    </span>
-                    {view === "dual" && (
-                      <span className="ascii-column">{ascii(r.data)}</span>
-                    )}
-                  </div>
-                ))
+                <LogRows
+                  rows={rows}
+                  view={view}
+                  timestamps={timestamps}
+                  selected={selected}
+                  onSelect={setSelected}
+                  scrollRef={log}
+                  follow={status.connected && !paused && mode === "debug"}
+                  active={mode === "debug"}
+                />
               )}
             </div>
             {selectedRow && (

@@ -13,6 +13,7 @@ type Harness = {
   connectError: string | null;
   status: Status;
   events: SerialEvent[];
+  savedText: string;
   holdPoll: boolean;
   pollCount: number;
   pending?: { result: Batch; resolve: (batch: Batch) => void };
@@ -41,6 +42,7 @@ async function setup(page: Page) {
       connectError: null,
       status: structuredClone(initial),
       events: [],
+      savedText: "",
       holdPoll: false,
       pollCount: 0,
     };
@@ -50,12 +52,19 @@ async function setup(page: Page) {
       __TAURI_INTERNALS__: {
         invoke: async (
           command: string,
-          args: { config?: { port: string }; payload?: { text: string } } = {},
+          args: {
+            config?: { port: string };
+            payload?: { text: string };
+            text?: string;
+          } = {},
         ) => {
           switch (command) {
             case "list_ports":
               if (state.error) throw state.error;
               return structuredClone(state.ports);
+            case "save_receive":
+              state.savedText = args.text!;
+              return true;
             case "preview":
               return [...new TextEncoder().encode(args.payload?.text || "")];
             case "poll": {
@@ -346,4 +355,150 @@ test("failed connection keeps the cause visible and permits editing and retry", 
   await expect(page.getByLabel("串口设备", { exact: true })).toHaveValue(
     "/dev/ttyUSB0",
   );
+});
+
+test("retained history keeps selection and raw views while paused and receiving", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.getByRole("button", { name: "连接串口", exact: true }).click();
+  await page.evaluate(() => {
+    const s = window.serialTest;
+    for (let id = 1; id <= 1000; id++) {
+      const data =
+        id === 1
+          ? [65, 0, 255, 13, 10]
+          : [...new TextEncoder().encode(`retained ${id}\n`)];
+      s.status.rx += data.length;
+      s.events.push({
+        id,
+        session: s.status.session,
+        timestamp: Date.now(),
+        direction: "RX",
+        data,
+      });
+    }
+  });
+  await expect(page.locator(".log-column-head")).toContainText(
+    "1000 条读取记录",
+  );
+  await page.getByRole("button", { name: "暂停自动滚动", exact: true }).click();
+  await page.locator(".log-surface").evaluate((e) => {
+    e.scrollTop = 0;
+  });
+  await page.locator('.log-row[data-event-id="1"]').click();
+  await expect(page.locator(".byte-detail")).toContainText("41 00 FF 0D 0A");
+  const scroll = await page
+    .locator(".log-surface")
+    .evaluate((e) => e.scrollTop);
+  await receive(page, 1001, "arrived while paused\n");
+  await expect(page.locator(".log-column-head")).toContainText(
+    "1001 条读取记录",
+  );
+  await expect(page.locator('.log-row[data-event-id="1"]')).toHaveClass(
+    /highlighted/,
+  );
+  expect(await page.locator(".log-surface").evaluate((e) => e.scrollTop)).toBe(
+    scroll,
+  );
+  await page.getByRole("button", { name: "HEX / ASCII", exact: true }).click();
+  const first = page.locator('.log-row[data-event-id="1"]');
+  await expect(first.locator(".row-content")).toHaveText("41 00 FF 0D 0A");
+  await expect(first.locator(".ascii-column")).toHaveText("A....");
+  await page.getByRole("button", { name: "文本", exact: true }).click();
+  await expect(first.locator(".row-content")).toContainText("A");
+  await page.getByRole("button", { name: "恢复自动滚动", exact: true }).click();
+  await expect
+    .poll(() =>
+      page
+        .locator(".log-surface")
+        .evaluate((e) => e.scrollHeight - e.scrollTop - e.clientHeight),
+    )
+    .toBeLessThan(3);
+  await page.getByRole("button", { name: "断开连接", exact: true }).click();
+  await expect(page.locator(".log-column-head")).toContainText(
+    "1001 条读取记录",
+  );
+  await page.getByLabel("清空接收区", { exact: true }).click();
+  await expect(page.locator(".log-row")).toHaveCount(0);
+  await expect(page.locator(".byte-detail")).toHaveCount(0);
+});
+
+test("virtual history bounds DOM without truncating retained data or exports", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.getByRole("button", { name: "连接串口", exact: true }).click();
+  await page.evaluate(() => {
+    const s = window.serialTest;
+    s.events = Array.from({ length: 5000 }, (_, i) => ({
+      id: i + 1,
+      session: s.status.session,
+      timestamp: Date.now(),
+      direction: "RX" as const,
+      data: [
+        ...new TextEncoder().encode(
+          `history-${String(i + 1).padStart(5, "0")}|`,
+        ),
+      ],
+    }));
+    s.status.rx = s.events.reduce((n, e) => n + e.data.length, 0);
+  });
+  await expect(page.locator(".log-column-head")).toContainText(
+    "4000 条读取记录",
+  );
+  await expect(page.locator('.log-row[data-event-id="5000"]')).toBeVisible();
+  expect(await page.locator(".log-row").count()).toBeLessThan(100);
+  await page.getByLabel("保存接收数据", { exact: true }).click();
+  const exported = await page.evaluate(() => window.serialTest.savedText);
+  expect(exported.match(/history-\d{5}\|/g)).toHaveLength(4000);
+  expect(exported).toContain("history-01001|");
+  expect(exported).toContain("history-05000|");
+  expect(exported).not.toContain("history-01000|");
+  await page.getByRole("button", { name: "暂停自动滚动", exact: true }).click();
+  await page.locator(".log-surface").evaluate((e) => {
+    e.scrollTop = 0;
+  });
+  await page.locator('.log-row[data-event-id="1001"]').click();
+  await expect(page.locator(".byte-detail")).toContainText("#1001");
+  await receive(page, 5001, "trimmed one record");
+  await expect(page.locator(".byte-detail")).toHaveCount(0);
+  await expect(page.locator(".log-column-head")).toContainText(
+    "4000 条读取记录",
+  );
+  await expect(page.locator('.log-row[data-event-id="1002"]')).toBeVisible();
+  expect(await page.locator(".log-row").count()).toBeLessThan(100);
+});
+
+test("virtual rows remeasure multiline content when format and viewport change", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.getByRole("button", { name: "连接串口", exact: true }).click();
+  await receive(page, 1, "long line ".repeat(50) + "\n" + "中文".repeat(60));
+  await receive(page, 2, "visible tail");
+  const tail = page.locator('.log-row[data-event-id="2"]');
+  for (const view of ["HEX / ASCII", "HEX", "文本"]) {
+    await page.getByRole("button", { name: view, exact: true }).click();
+    await expect(tail).toBeInViewport();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const first = document
+            .querySelector('.log-row[data-event-id="1"]')!
+            .getBoundingClientRect();
+          const last = document
+            .querySelector('.log-row[data-event-id="2"]')!
+            .getBoundingClientRect();
+          return last.top - first.bottom;
+        }),
+      )
+      .toBeGreaterThanOrEqual(-1);
+  }
+  await page.setViewportSize({ width: 900, height: 640 });
+  await expect(tail).toBeInViewport();
+  await page.getByLabel("切换配置区域", { exact: true }).click();
+  await expect(tail).toBeInViewport();
+  await page.getByRole("button", { name: "断开连接", exact: true }).click();
+  await expect(page.locator(".log-column-head")).toContainText("2 条读取记录");
 });

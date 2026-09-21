@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   appendRows,
+  emptyStatus,
+  sameStatus,
   ascii,
   exportText,
   hex,
@@ -58,5 +60,27 @@ describe("terminal input", () => {
     expect(terminalInput("\r", true)).toEqual([13, 10]);
     expect(terminalInput("\r", false)).toEqual([13]);
     expect(terminalInput("\x7f", true)).toEqual([8]);
+  });
+});
+
+describe("status snapshots", () => {
+  it("skips identical snapshots without hiding connection, error or task changes", () => {
+    expect(sameStatus(emptyStatus, { ...emptyStatus })).toBe(true);
+    for (const change of [
+      { connected: true },
+      { session: 1 },
+      { rx: 1 },
+      { tx: 1 },
+      { error: "unplugged" },
+      { autoRunning: true },
+      { autoCount: 1 },
+      { fileRunning: true },
+      { fileSent: 1 },
+      { dropped: 1 },
+    ]) {
+      expect(sameStatus(emptyStatus, { ...emptyStatus, ...change })).toBe(
+        false,
+      );
+    }
   });
 });

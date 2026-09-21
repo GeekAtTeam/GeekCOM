@@ -20,12 +20,45 @@ npm run tauri build -- --bundles deb
 
 `npm run dev` 仅启动浏览器预览，实际串口和文件操作需要 Tauri 桌面进程。Windows / macOS 的系统准备参见 [Tauri 官方说明](https://v2.tauri.app/start/prerequisites/)。本次完成 Linux 桌面验证，其他平台仍需原生构建与设备测试。
 
+### Linux 开发模式提示 Too many open files
+
+如果 `npm run tauri dev` 在 `tauri-cli` 创建监听器时崩溃，先检查两类额度：
+
+```bash
+ulimit -n
+cat /proc/sys/fs/inotify/max_user_instances
+```
+
+当文件描述符额度充足而 inotify 实例额度耗尽时，增加 `ulimit` 或 `max_user_watches` 不会解决实例不足。关闭不使用的开发服务/编辑器，或临时提高每用户实例额度：
+
+```bash
+sudo sysctl -w fs.inotify.max_user_instances=1024
+npm run tauri dev
+```
+
+该设置重启后恢复；如确需长期调整，可将 `fs.inotify.max_user_instances = 1024` 写入 `/etc/sysctl.d/99-geekcom-inotify.conf` 并执行 `sudo sysctl --system`。程序不会自行修改系统参数。
+
+只需测试串口功能和性能时，直接运行 Release 版，不启动开发监听器：
+
+```bash
+# 已有最新构建时直接启动
+./src-tauri/target/release/geekcom
+
+# 需要重新构建时，绕过 Tauri CLI 的开发监听流程
+npm run build
+cargo build --release --manifest-path src-tauri/Cargo.toml --features tauri/custom-protocol
+./src-tauri/target/release/geekcom
+```
+
+inotify 的实例限制与 `EMFILE` 含义见 [Linux 手册](https://man7.org/linux/man-pages/man2/inotify_init.2.html)。
+
 ### 连接与接收控制
 
 发送计数表示操作系统实际接受的字节，不代表设备已收到。短写会报告已提交/请求字节数，不自动重发剩余内容；周期或文件发送遇到写入失败会停止任务并关闭连接。
 
 - 串口设备使用同一个可编辑选框：直接输入端口名，或展开列表选择。列表仅显示 `/dev/ttyXXX`、`COMx` 等端口名；刷新重新枚举设备，不显示常驻数量提示，仅失败时提示。选框尺寸不随内容变化。
 - “暂停滚动 / 恢复滚动”只控制接收区的自动滚动，串口仍继续接收。未连接时按钮禁用，每次连接或断开都会重置滚动状态。
+- 接收区仅渲染可见记录及附近缓冲，历史仍按最多 4,000 条 / 2 MiB 保留；滚动可查看保留记录，保存会导出全部保留内容，不限于当前屏幕。
 - 断开会关闭串口、停止发送任务，并丢弃尚未显示的缓冲；已显示记录保留。断开前发出但延迟返回的数据请求不会再追加记录或恢复旧的连接状态。
 
 ### 配色方案

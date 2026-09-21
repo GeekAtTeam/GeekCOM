@@ -14,6 +14,7 @@
     "format": "prettier --write ui vite.config.ts playwright.config.ts tsconfig.json src-tauri/tauri.conf.json package.json"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.14.13",
     "@tauri-apps/api": "^2.10.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",

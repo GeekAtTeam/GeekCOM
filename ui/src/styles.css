@@ -536,17 +536,23 @@ small {
     12px/1.8 "SFMono-Regular",
     Consolas,
     monospace;
-  padding: 7px 0;
+  overflow-anchor: none;
+}
+.log-list {
+  position: relative;
+  width: 100%;
 }
 .log-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
   display: flex;
   gap: 12px;
   padding: 2px 14px;
   align-items: baseline;
   border-bottom: 1px solid #ffffff04;
   cursor: text;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 26px;
 }
 .log-row.highlighted {
   background: #263242;
