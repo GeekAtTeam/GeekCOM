@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use geekcom_core::{Batch, Config, Engine, Payload, PortInfo};
+use geekcom_core::{Batch, Config, Engine, Payload, PortInfo, Status};
 use serde::Serialize;
 use std::{path::PathBuf, sync::Mutex};
 use tauri::{Manager, State};
@@ -15,8 +15,10 @@ struct SelectedFile {
     size: u64,
 }
 #[tauri::command]
-fn list_ports() -> Result<Vec<PortInfo>, String> {
-    geekcom_core::ports()
+async fn list_ports() -> Result<Vec<PortInfo>, String> {
+    tauri::async_runtime::spawn_blocking(geekcom_core::ports)
+        .await
+        .map_err(|e| e.to_string())?
 }
 #[tauri::command]
 fn preview(payload: Payload) -> Result<Vec<u8>, String> {
@@ -31,18 +33,24 @@ fn dismiss_error(state: State<AppState>) {
     state.engine.dismiss_error();
 }
 #[tauri::command]
-async fn connect_serial(config: Config, state: State<'_, AppState>) -> Result<(), String> {
+async fn connect_serial(config: Config, state: State<'_, AppState>) -> Result<Status, String> {
     let engine = state.engine.clone();
-    tauri::async_runtime::spawn_blocking(move || engine.open(config))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        engine.open(config)?;
+        Ok(engine.status())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 #[tauri::command]
-async fn disconnect_serial(state: State<'_, AppState>) -> Result<(), String> {
+async fn disconnect_serial(state: State<'_, AppState>) -> Result<Status, String> {
     let engine = state.engine.clone();
-    tauri::async_runtime::spawn_blocking(move || engine.close())
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        engine.close()?;
+        Ok(engine.status())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 #[tauri::command]
 async fn send(payload: Payload, state: State<'_, AppState>) -> Result<(), String> {

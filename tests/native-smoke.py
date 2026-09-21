@@ -10,6 +10,7 @@ import pty
 import select
 import shutil
 import subprocess
+import threading
 import time
 import urllib.request
 
@@ -21,6 +22,8 @@ BINARY = Path(os.environ.get("GEEKCOM_BINARY", ROOT / "src-tauri/target/debug/ge
 master, slave = pty.openpty()
 port = os.ttyname(slave)
 session = None
+flood_stop = threading.Event()
+flood_thread = None
 out = ROOT / "test-results"
 out.mkdir(exist_ok=True)
 log = (out / "native-driver.log").open("w")
@@ -100,6 +103,19 @@ try:
     wait_js("return !!document.querySelector('.connection')")
     field("外观", "dark")
     # Connection is initiated by the actual React button, not a mocked command.
+    wait_js("return !document.querySelector('[aria-label=\"串口设备\"]').disabled")
+    port_size = js("const r=document.querySelector('[aria-label=\"串口设备\"]').getBoundingClientRect();return [r.width,r.height]")
+    click('[aria-label="展开串口列表"]')
+    detected = js("return [...document.querySelectorAll('[role=option]')].map(e=>e.textContent)")
+    print("Detected ports:", detected)
+    if detected:
+        click('[role="option"]')
+        assert js("return document.querySelector('[aria-label=\"串口设备\"]').value") == detected[0]
+    else:
+        click('[aria-label="展开串口列表"]')
+    assert js("return document.querySelector('[aria-label=\"自动滚动\"]').disabled")
+    field("串口设备", "/dev/serial/by-id/very-long-port-name-that-must-not-resize-the-picker")
+    assert js("const r=document.querySelector('[aria-label=\"串口设备\"]').getBoundingClientRect();return [r.width,r.height]") == port_size
     field("串口设备", port)
     click(".connection")
     wait_js("return document.querySelector('.connection').textContent.includes('断开')")
@@ -159,8 +175,38 @@ try:
         print("SKIP: native file dialogs (install xdotool to enable)")
     click(".tabs button:nth-child(2)")
     assert js("return !document.querySelector('.receive-pane').hidden"), "Mode changed while connected"
+
+    # Reproduce an IMU streaming while the user disconnects. The peer keeps
+    # writing after the click; neither visible history nor counters may advance
+    # after the backend acknowledges close.
+    os.set_blocking(master, False)
+    def stream_imu():
+        while not flood_stop.is_set():
+            try:
+                os.write(master, b"IMU streaming regression\r\n" * 16)
+            except BlockingIOError:
+                pass
+            except OSError:
+                break
+            flood_stop.wait(0.001)
+    flood_thread = threading.Thread(target=stream_imu, daemon=True)
+    flood_thread.start()
+    wait_js("return document.querySelector('.log-surface').textContent.includes('IMU streaming regression')")
+    click('[aria-label="暂停自动滚动"]')
+    wait_js("return !!document.querySelector('[aria-label=\"恢复自动滚动\"]')")
     click(".connection")
     wait_js("return document.querySelector('.connection').textContent.includes('连接串口')")
+    assert js("return document.querySelector('[aria-label=\"自动滚动\"]').disabled")
+    snapshot = js("return [document.querySelector('.log-surface').textContent, document.querySelector('.statusbar').textContent]")
+    time.sleep(0.3)
+    assert js("return [document.querySelector('.log-surface').textContent, document.querySelector('.statusbar').textContent]") == snapshot, "Data advanced after disconnect"
+    # Opening the slave independently proves the engine released the OS handle.
+    check_fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+    os.close(check_fd)
+    flood_stop.set()
+    flood_thread.join(timeout=2)
+    os.set_blocking(master, True)
+    print("PASS: continuous RX disconnect freezes display/stats, resets scroll control and releases the port")
     click(".tabs button:nth-child(2)")
     click(".connection")
     wait_js("return document.querySelector('.connection').textContent.includes('断开')")
@@ -174,10 +220,16 @@ try:
     wait_js("return document.querySelector('.message-bar').textContent.includes('接收失败') || document.querySelector('.message-bar').textContent.includes('断开')")
     click(".tabs button:first-child")
     click(".segmented button:nth-child(3)")
-    image = request("GET", f"/session/{session}/screenshot")
-    (out / "native-workbench.png").write_bytes(base64.b64decode(image))
+    if os.environ.get("GEEKCOM_SCREENSHOT", "1") != "0":
+        image = request("GET", f"/session/{session}/screenshot")
+        (out / "native-workbench.png").write_bytes(base64.b64decode(image))
+    else:
+        print("SKIP: desktop screenshot (GEEKCOM_SCREENSHOT=0)")
     print("PASS: native UI + IPC + PTY: connect, RX, split UTF-8, HEX/ASCII, text/HEX TX, validation, periodic send/stop, mode guard, terminal response, unplug")
 finally:
+    flood_stop.set()
+    if flood_thread:
+        flood_thread.join(timeout=2)
     if session:
         request("DELETE", f"/session/{session}")
     driver.terminate()

@@ -126,3 +126,39 @@ fn unplug_cancels_tasks_and_updates_connection_state() {
     assert!(status.error.is_some());
     assert!(engine.send(vec![2]).is_err());
 }
+
+#[test]
+fn close_discards_a_large_rx_backlog_and_releases_the_device() {
+    let (engine, mut peer, cfg) = setup();
+    // More than one poll can consume. Do not drain the queue while receiving.
+    let data = vec![0x42; 2 * 1024 * 1024];
+    peer.write_all(&data).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(4);
+    while engine.status().rx < data.len() as u64 {
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(5));
+    }
+    engine.close().unwrap();
+    let after = engine.poll();
+    assert!(!after.status.connected);
+    assert_eq!(after.status.rx, data.len() as u64);
+    assert!(
+        after.events.is_empty(),
+        "closed sessions must not replay queued data"
+    );
+    thread::sleep(Duration::from_millis(80));
+    assert_eq!(engine.status().rx, after.status.rx);
+    assert!(engine.poll().events.is_empty());
+
+    // TIOCEXCL would reject this if the old worker still owned the slave.
+    let port = serialport::new(&cfg.port, 115200).open().unwrap();
+    drop(port);
+    engine.open(cfg).unwrap();
+    let batch = engine.poll();
+    assert!(batch.status.connected);
+    assert!(batch.status.session > after.status.session);
+    assert!(
+        batch.events.is_empty(),
+        "no old-session data after reconnect"
+    );
+}

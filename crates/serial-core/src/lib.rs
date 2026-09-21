@@ -122,6 +122,10 @@ struct Shared {
     seq: u64,
 }
 impl Shared {
+    fn clear_events(&mut self) {
+        self.events.clear();
+        self.bytes = 0;
+    }
     fn event(&mut self, direction: &str, bytes: &[u8]) {
         self.seq += 1;
         self.bytes += bytes.len();
@@ -223,6 +227,9 @@ impl Engine {
     }
     pub fn dismiss_error(&self) {
         self.inner.shared.lock().unwrap().status.error = None;
+    }
+    pub fn status(&self) -> Status {
+        self.inner.shared.lock().unwrap().status.clone()
     }
     pub fn poll(&self) -> Batch {
         let mut s = self.inner.shared.lock().unwrap();
@@ -363,6 +370,7 @@ fn worker(commands: mpsc::Receiver<Command>, shared: Arc<Mutex<Shared>>) {
                                 automatic = None;
                                 transfer = None;
                                 let mut s = shared.lock().unwrap();
+                                s.clear_events();
                                 s.status = Status {
                                     session: s.status.session + 1,
                                     connected: true,
@@ -379,6 +387,9 @@ fn worker(commands: mpsc::Receiver<Command>, shared: Arc<Mutex<Shared>>) {
                     port = None;
                     automatic = None;
                     transfer = None;
+                    // Closing is also a presentation boundary. Retain the
+                    // counters, but never replay queued RX after acknowledging it.
+                    shared.lock().unwrap().clear_events();
                     (Ok(()), r)
                 }
                 Command::Send(bytes, r) => {
@@ -538,7 +549,9 @@ fn worker(commands: mpsc::Receiver<Command>, shared: Arc<Mutex<Shared>>) {
             port = None;
             automatic = None;
             transfer = None;
-            shared.lock().unwrap().status.error = Some(e);
+            let mut state = shared.lock().unwrap();
+            state.clear_events();
+            state.status.error = Some(e);
         }
         let mut s = shared.lock().unwrap();
         s.status.connected = port.is_some();

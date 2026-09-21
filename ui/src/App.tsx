@@ -30,6 +30,7 @@ import {
   Radio,
 } from "lucide-react";
 import { TerminalView, type TerminalHandle } from "./TerminalView";
+import { PortComboBox } from "./PortComboBox";
 import {
   appendRows,
   ascii,
@@ -73,6 +74,14 @@ export default function App() {
     }),
   );
   const [ports, setPorts] = useState<Port[]>([]);
+  const [manualPort, setManualPort] = useState(() =>
+    preference("manualPort", false),
+  );
+  const [refreshing, setRefreshing] = useState(false);
+  const [portError, setPortError] = useState("");
+  const refreshSequence = useRef(0);
+  const manualPortRef = useRef(manualPort);
+  manualPortRef.current = manualPort;
   const [status, setStatus] = useState<Status>(emptyStatus);
   const [rows, setRows] = useState<LogRow[]>([]);
   const [view, setView] = useState<View>("text");
@@ -104,6 +113,7 @@ export default function App() {
   const decoderSession = useRef(0);
   const terminalQueue = useRef(Promise.resolve());
   const inputEpoch = useRef(0);
+  const connectionChanging = useRef(false);
   const live = useRef({ autoClear, mode, status });
   live.current = { autoClear, mode, status };
   const desktop = isTauri();
@@ -124,14 +134,28 @@ export default function App() {
     [],
   );
   const refresh = useCallback(async () => {
+    const sequence = ++refreshSequence.current;
+    setRefreshing(true);
+    setPortError("");
     try {
       const list = await invoke<Port[]>("list_ports");
+      if (sequence !== refreshSequence.current) return;
       setPorts(list);
-      setConfig((c) => (c.port ? c : { ...c, port: list[0]?.name || "" }));
+      setConfig((c) =>
+        manualPortRef.current || list.some((p) => p.name === c.port)
+          ? c
+          : { ...c, port: list[0]?.name || "" },
+      );
     } catch (e) {
-      setMessage(String(e));
+      if (sequence === refreshSequence.current)
+        setPortError(`刷新失败：${String(e)}`);
+    } finally {
+      if (sequence === refreshSequence.current) setRefreshing(false);
     }
   }, []);
+  useEffect(() => {
+    localStorage.setItem("manualPort", JSON.stringify(manualPort));
+  }, [manualPort]);
   useEffect(() => {
     if (desktop) void refresh();
   }, [desktop, refresh]);
@@ -156,14 +180,25 @@ export default function App() {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
     const tick = async () => {
+      const epoch = inputEpoch.current;
       try {
+        if (connectionChanging.current) return;
         const batch = await invoke<Batch>("poll");
-        if (disposed) return;
+        if (
+          disposed ||
+          connectionChanging.current ||
+          epoch !== inputEpoch.current
+        )
+          return;
         setStatus(batch.status);
         live.current.status = batch.status;
+        if (!batch.status.connected) {
+          setPaused(false);
+          return;
+        }
         const incoming: LogRow[] = [];
         for (const e of batch.events) {
-          if (e.direction === "RX") {
+          if (e.direction === "RX" && e.session === batch.status.session) {
             if (decoderSession.current !== e.session) {
               decoder.current = new TextDecoder();
               decoderSession.current = e.session;
@@ -180,9 +215,18 @@ export default function App() {
           }
         }
         if (incoming.length)
-          setRows((old) => appendRows(old, incoming, live.current.autoClear));
+          setRows((old) =>
+            epoch === inputEpoch.current && !connectionChanging.current
+              ? appendRows(old, incoming, live.current.autoClear)
+              : old,
+          );
       } catch (e) {
-        if (!disposed) setMessage(String(e));
+        if (
+          !disposed &&
+          epoch === inputEpoch.current &&
+          !connectionChanging.current
+        )
+          setMessage(String(e));
       } finally {
         if (!disposed) timer = setTimeout(tick, 40);
       }
@@ -194,9 +238,9 @@ export default function App() {
     };
   }, [desktop]);
   useEffect(() => {
-    if (!paused && log.current)
+    if (status.connected && !paused && log.current)
       log.current.scrollTop = log.current.scrollHeight;
-  }, [rows, paused, view]);
+  }, [rows, paused, view, status.connected]);
   useEffect(() => {
     if (!desktop) return;
     let cancelled = false;
@@ -219,11 +263,26 @@ export default function App() {
     };
   }, [text, txHex, ending, desktop]);
   const connect = () => {
+    if (connectionChanging.current) return;
+    const closing = live.current.status.connected;
+    connectionChanging.current = true;
     inputEpoch.current += 1;
-    return run(() =>
-      status.connected
-        ? invoke("disconnect_serial")
-        : invoke("connect_serial", { config }),
+    setPaused(false);
+    return run(
+      async () => {
+        try {
+          const next = await (closing
+            ? invoke<Status>("disconnect_serial")
+            : invoke<Status>("connect_serial", { config }));
+          live.current.status = next;
+          setStatus(next);
+          decoder.current = new TextDecoder();
+        } finally {
+          inputEpoch.current += 1;
+          connectionChanging.current = false;
+        }
+      },
+      closing ? "串口已关闭，待显示缓冲已丢弃；已显示记录保留" : "串口已连接",
     );
   };
   const send = () =>
@@ -250,6 +309,7 @@ export default function App() {
     }
   };
   const toggleMode = (next: "debug" | "terminal") => {
+    if (connectionChanging.current) return;
     if (next !== mode && status.connected) {
       setMessage("切换模式前请先关闭串口连接");
       return;
@@ -345,7 +405,12 @@ export default function App() {
         <span className="toolbar-divider" />
         <button
           className={status.connected ? "connection connected" : "connection"}
-          disabled={!desktop || busy || (!status.connected && !config.port)}
+          disabled={
+            !desktop ||
+            busy ||
+            refreshing ||
+            (!status.connected && !config.port)
+          }
           onClick={() => void connect()}
         >
           {status.connected ? <Unplug size={15} /> : <Plug size={15} />}{" "}
@@ -381,34 +446,34 @@ export default function App() {
             <div className="config-form">
               <Field label="串口设备">
                 <div className="port-field">
-                  <input
-                    aria-label="串口设备"
-                    list="ports"
-                    placeholder="选择或输入端口路径"
+                  <PortComboBox
                     value={config.port}
-                    disabled={status.connected || busy}
-                    onChange={(e) =>
-                      setConfig({ ...config, port: e.target.value })
-                    }
+                    ports={ports.map((p) => p.name)}
+                    disabled={status.connected || busy || refreshing}
+                    onChange={(port, selected) => {
+                      manualPortRef.current = !selected;
+                      setManualPort(!selected);
+                      setConfig({ ...config, port });
+                    }}
                   />
                   <button
                     className="icon-button"
                     title="刷新串口"
                     aria-label="刷新串口"
-                    disabled={!desktop || status.connected || busy}
+                    disabled={
+                      !desktop || status.connected || busy || refreshing
+                    }
                     onClick={() => void refresh()}
                   >
                     <RefreshCw size={14} />
                   </button>
                 </div>
-                <datalist id="ports">
-                  {ports.map((p) => (
-                    <option key={p.name} value={p.name}>
-                      {p.description}
-                    </option>
-                  ))}
-                </datalist>
               </Field>
+              {portError && (
+                <p className="field-hint port-feedback" role="alert">
+                  {portError}
+                </p>
+              )}
               <Field label="波特率">
                 <select
                   aria-label="波特率"
@@ -541,12 +606,35 @@ export default function App() {
               </label>
               <span className="toolbar-spacer" />
               <button
-                title={paused ? "恢复跟随" : "暂停跟随"}
-                aria-label="暂停跟随"
-                className={paused ? "icon-button toggled" : "icon-button"}
+                title={
+                  status.connected
+                    ? paused
+                      ? "恢复自动滚动"
+                      : "暂停自动滚动，继续接收数据"
+                    : "连接串口后可控制自动滚动"
+                }
+                aria-label={
+                  status.connected
+                    ? paused
+                      ? "恢复自动滚动"
+                      : "暂停自动滚动"
+                    : "自动滚动"
+                }
+                aria-pressed={paused}
+                className={paused ? "quiet toggled" : "quiet"}
+                disabled={!status.connected || busy}
                 onClick={() => setPaused(!paused)}
               >
-                {paused ? <Play size={15} /> : <Pause size={15} />}
+                {paused || !status.connected ? (
+                  <Play size={15} />
+                ) : (
+                  <Pause size={15} />
+                )}
+                {!status.connected
+                  ? "自动滚动"
+                  : paused
+                    ? "恢复滚动"
+                    : "暂停滚动"}
               </button>
               <button
                 className="icon-button"
@@ -891,7 +979,8 @@ export default function App() {
             </p>
             <p>
               TX 表示向系统提交的字节数，不代表设备已收到。界面最多保留 4,000 条
-              / 2 MiB 接收数据；保存导出的是当前视图。暂停跟随不会停止采集。
+              / 2 MiB
+              接收数据；保存导出的是当前视图。暂停滚动不会停止接收；断开会关闭串口并丢弃待显示缓冲，保留已显示记录。
             </p>
             <p>
               切换模式前需断开连接。串口参数是否可用取决于系统、驱动与设备。

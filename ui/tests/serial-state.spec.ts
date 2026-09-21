@@ -1,0 +1,305 @@
+import { test, expect, type Page } from "@playwright/test";
+import {
+  emptyStatus,
+  type Batch,
+  type Port,
+  type SerialEvent,
+  type Status,
+} from "../src/model";
+
+type Harness = {
+  ports: Port[];
+  error: string | null;
+  status: Status;
+  events: SerialEvent[];
+  holdPoll: boolean;
+  pollCount: number;
+  pending?: { result: Batch; resolve: (batch: Batch) => void };
+};
+declare global {
+  interface Window {
+    serialTest: Harness;
+  }
+}
+async function setup(page: Page) {
+  await page.addInitScript((initial) => {
+    localStorage.setItem(
+      "connection",
+      JSON.stringify({
+        port: "/dev/expired",
+        baud: 115200,
+        dataBits: 8,
+        parity: "none",
+        stopBits: "1",
+      }),
+    );
+    localStorage.setItem("manualPort", "false");
+    const state: Harness = {
+      ports: [{ name: "/dev/ttyACM0", description: "IMU" }],
+      error: null,
+      status: initial,
+      events: [],
+      holdPoll: false,
+      pollCount: 0,
+    };
+    window.serialTest = state;
+    Object.assign(window, {
+      isTauri: true,
+      __TAURI_INTERNALS__: {
+        invoke: async (
+          command: string,
+          args: { config?: { port: string }; payload?: { text: string } } = {},
+        ) => {
+          switch (command) {
+            case "list_ports":
+              if (state.error) throw state.error;
+              return structuredClone(state.ports);
+            case "preview":
+              return [...new TextEncoder().encode(args.payload?.text || "")];
+            case "poll": {
+              state.pollCount++;
+              const result = {
+                status: structuredClone(state.status),
+                events: state.events.splice(0),
+              };
+              if (state.holdPoll) {
+                state.holdPoll = false;
+                return new Promise<Batch>((resolve) => {
+                  state.pending = { result, resolve };
+                });
+              }
+              return result;
+            }
+            case "connect_serial":
+              state.status = {
+                ...initial,
+                session: state.status.session + 1,
+                connected: true,
+                port: args.config!.port,
+              };
+              return structuredClone(state.status);
+            case "disconnect_serial":
+              state.status.connected = false;
+              state.events = [];
+              return structuredClone(state.status);
+            default:
+              throw new Error(`Unexpected command: ${command}`);
+          }
+        },
+      },
+    });
+  }, emptyStatus);
+  await page.goto("/");
+  await expect(page.getByLabel("串口设备", { exact: true })).toHaveValue(
+    "/dev/ttyACM0",
+  );
+  await expect(page.getByLabel("刷新串口", { exact: true })).toBeEnabled();
+}
+
+async function receive(page: Page, id: number, text: string, session?: number) {
+  await page.evaluate(
+    ({ id, text, session }) => {
+      const s = window.serialTest;
+      const data = [...new TextEncoder().encode(text)];
+      s.status.rx += data.length;
+      s.events.push({
+        id,
+        session: session ?? s.status.session,
+        timestamp: Date.now(),
+        direction: "RX",
+        data,
+      });
+    },
+    { id, text, session },
+  );
+}
+
+test("editable port picker stays compact, lists names only and preserves typed paths on refresh", async ({
+  page,
+}) => {
+  await setup(page);
+  const input = page.getByRole("combobox", { name: "串口设备", exact: true });
+  const toggle = page.getByRole("button", {
+    name: "展开串口列表",
+    exact: true,
+  });
+  const refresh = page.getByRole("button", { name: "刷新串口", exact: true });
+  const original = await input.boundingBox();
+  await toggle.click();
+  await expect(page.getByRole("listbox").getByRole("option")).toHaveText([
+    "/dev/ttyACM0",
+  ]);
+  await expect(page.getByRole("listbox")).not.toContainText("IMU");
+  await page.getByRole("option", { name: "/dev/ttyACM0", exact: true }).click();
+  await expect(input).toHaveValue("/dev/ttyACM0");
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+  await expect(page.getByText(/已发现.*个串口/)).toHaveCount(0);
+  await page.evaluate(() => {
+    window.serialTest.ports = [
+      { name: "/dev/ttyUSB0", description: "USB adapter" },
+    ];
+  });
+  await refresh.click();
+  await expect(input).toHaveValue("/dev/ttyUSB0");
+  await page.evaluate(() => {
+    window.serialTest.error = "enumeration failed";
+  });
+  await refresh.click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "刷新失败：enumeration failed",
+  );
+  await expect(refresh).toBeEnabled();
+  await page.evaluate(() => {
+    window.serialTest.error = null;
+    window.serialTest.ports = [];
+  });
+  await refresh.click();
+  await expect(input).toHaveValue("");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "连接串口", exact: true }),
+  ).toBeDisabled();
+  await toggle.click();
+  await expect(page.getByRole("listbox")).toContainText("未发现串口");
+  await input.fill("/dev/pts/42");
+  await refresh.click();
+  await expect(input).toHaveValue("/dev/pts/42");
+  await expect(page.getByLabel("手动串口路径")).toHaveCount(0);
+  await input.fill(
+    "/dev/serial/by-id/usb-very-long-device-name-that-must-not-resize-the-field",
+  );
+  const long = await input.boundingBox();
+  expect(long!.width).toBe(original!.width);
+  expect(long!.height).toBe(original!.height);
+  await expect(
+    page.getByRole("button", { name: "连接串口", exact: true }),
+  ).toBeEnabled();
+});
+
+test("editable port picker supports keyboard selection, dismissal and direct typing", async ({
+  page,
+}) => {
+  await setup(page);
+  const input = page.getByRole("combobox", { name: "串口设备", exact: true });
+  await page.evaluate(() => {
+    window.serialTest.ports = [
+      { name: "/dev/ttyACM0", description: "IMU" },
+      { name: "COM12", description: "Windows port" },
+    ];
+  });
+  await page.getByRole("button", { name: "刷新串口", exact: true }).click();
+  await input.press("ArrowDown");
+  await expect(input).toHaveAttribute("aria-expanded", "true");
+  await input.press("ArrowDown");
+  await input.press("Enter");
+  await expect(input).toHaveValue("COM12");
+  await expect(input).toHaveAttribute("aria-expanded", "false");
+  await input.fill("COM");
+  await expect(page.getByRole("listbox").getByRole("option")).toHaveText([
+    "COM12",
+  ]);
+  await input.press("Escape");
+  await expect(input).toHaveValue("COM");
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+  await input.fill("COM42");
+  await input.press("Tab");
+  await expect(input).toHaveValue("COM42");
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+  await page.getByRole("button", { name: "连接串口", exact: true }).click();
+  await expect(input).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "展开串口列表", exact: true }),
+  ).toBeDisabled();
+});
+
+test("auto-scroll only operates while connected, keeps receiving while paused and resets on disconnect", async ({
+  page,
+}) => {
+  await setup(page);
+  await expect(
+    page.getByRole("button", { name: "自动滚动", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "连接串口", exact: true }).click();
+  await page.getByRole("button", { name: "暂停自动滚动", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "恢复自动滚动", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await receive(page, 1, "IMU sample 1");
+  await expect(page.locator(".log-row")).toHaveText(/IMU sample 1/);
+  await page.getByRole("button", { name: "断开连接", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "自动滚动", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "自动滚动", exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".log-row")).toHaveCount(1);
+  await page.getByRole("button", { name: "连接串口", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "暂停自动滚动", exact: true }),
+  ).toBeEnabled();
+  await receive(page, 2, "old session tail", 1);
+  await receive(page, 3, "IMU sample 2");
+  await expect(page.locator(".log-row")).toHaveCount(2);
+  await expect(page.locator(".log-surface")).not.toContainText(
+    "old session tail",
+  );
+  await page.evaluate(() => {
+    window.serialTest.status.connected = false;
+    window.serialTest.status.error = "Device unplugged";
+  });
+  await expect(
+    page.getByRole("button", { name: "自动滚动", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "连接串口", exact: true }),
+  ).toBeEnabled();
+});
+
+test("a poll response arriving after disconnect cannot append data or restore the old connected state", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.getByRole("button", { name: "连接串口", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "断开连接", exact: true }),
+  ).toBeEnabled();
+  await receive(page, 1, "retained sample");
+  await expect(page.locator(".log-row")).toHaveCount(1);
+  await page.evaluate(() => {
+    const s = window.serialTest;
+    s.holdPoll = true;
+    s.events.push({
+      id: 2,
+      session: s.status.session,
+      timestamp: Date.now(),
+      direction: "RX",
+      data: [...new TextEncoder().encode("stale IMU sample")],
+    });
+  });
+  await expect
+    .poll(() => page.evaluate(() => !!window.serialTest.pending))
+    .toBe(true);
+  await page.getByRole("button", { name: "断开连接", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "连接串口", exact: true }),
+  ).toBeEnabled();
+  const oldCount = await page.evaluate(() => {
+    const s = window.serialTest;
+    s.pending!.resolve(s.pending!.result);
+    return s.pollCount;
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.serialTest.pollCount))
+    .toBeGreaterThan(oldCount);
+  await expect(page.locator(".log-row")).toHaveCount(1);
+  await expect(page.locator(".log-surface")).not.toContainText(
+    "stale IMU sample",
+  );
+  await expect(
+    page.getByRole("button", { name: "连接串口", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "自动滚动", exact: true }),
+  ).toBeDisabled();
+});
