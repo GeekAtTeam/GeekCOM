@@ -3,7 +3,7 @@ use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
 use std::{
     collections::VecDeque,
     fs::File,
-    io::Read,
+    io::{Read, Write},
     path::PathBuf,
     sync::{mpsc, Arc, Mutex},
     thread,
@@ -308,32 +308,40 @@ fn open_port(c: &Config) -> Result<Box<dyn SerialPort>, String> {
         .open()
         .map_err(|e| format!("无法打开 {}: {e}", c.port))
 }
-fn write_bytes(
-    port: &mut dyn SerialPort,
+fn write_bytes<W: Write + ?Sized>(
+    port: &mut W,
     bytes: &[u8],
     s: &Arc<Mutex<Shared>>,
 ) -> Result<(), String> {
-    let mut offset = 0;
-    while offset < bytes.len() {
-        match port.write(&bytes[offset..]) {
-            Ok(0) => return Err(format!("写入停止，已提交 {offset}/{} 字节", bytes.len())),
+    if bytes.is_empty() {
+        return Ok(());
+    }
+    loop {
+        match port.write(bytes) {
             Ok(n) => {
-                let mut state = s.lock().unwrap();
-                state.status.tx += n as u64;
-                state.event("TX", &bytes[offset..offset + n]);
-                offset += n;
+                if n > 0 {
+                    let mut state = s.lock().unwrap();
+                    state.status.tx += n as u64;
+                    state.event("TX", &bytes[..n]);
+                }
+                // A partial command may already have reached the device. Report
+                // the accepted prefix and let the user decide how to recover.
+                return if n == bytes.len() {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "写入不完整，已提交 {n}/{} 字节；未自动重发",
+                        bytes.len()
+                    ))
+                };
             }
+            // Interrupted means no bytes were accepted by this write call.
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-            Err(e) => {
-                return Err(format!(
-                    "发送失败（已提交 {offset}/{} 字节）: {e}",
-                    bytes.len()
-                ))
-            }
+            Err(e) => return Err(format!("发送失败（已提交 0/{} 字节）: {e}", bytes.len())),
         }
     }
-    Ok(())
 }
+
 struct Auto {
     data: Vec<u8>,
     interval: Duration,
@@ -607,5 +615,89 @@ mod tests {
         let e = Engine::new();
         assert!(e.send(vec![1]).is_err());
         assert_eq!(e.poll().status.tx, 0);
+    }
+}
+
+#[cfg(test)]
+mod write_tests {
+    use super::*;
+    use std::io::{self, ErrorKind};
+
+    struct ScriptedWriter {
+        outcomes: VecDeque<io::Result<usize>>,
+        calls: Vec<Vec<u8>>,
+    }
+    impl Write for ScriptedWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.calls.push(bytes.to_vec());
+            self.outcomes.pop_front().expect("unexpected retry")
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    fn state() -> Arc<Mutex<Shared>> {
+        Arc::new(Mutex::new(Shared {
+            status: Status {
+                session: 7,
+                tx: 11,
+                ..Status::default()
+            },
+            events: VecDeque::new(),
+            bytes: 0,
+            seq: 20,
+        }))
+    }
+    #[test]
+    fn short_write_records_only_the_accepted_prefix_and_does_not_retry() {
+        let state = state();
+        let mut writer = ScriptedWriter {
+            outcomes: [Ok(2)].into(),
+            calls: vec![],
+        };
+        let error = write_bytes(&mut writer, &[0, 255, 13, 10], &state).unwrap_err();
+        assert!(error.contains("2/4"));
+        assert_eq!(writer.calls, vec![vec![0, 255, 13, 10]]);
+        let s = state.lock().unwrap();
+        assert_eq!(s.status.tx, 13);
+        assert_eq!(s.events.len(), 1);
+        let event = &s.events[0];
+        assert_eq!(event.data, [0, 255]);
+        assert_eq!((event.id, event.session), (21, 7));
+        assert_eq!(event.direction, "TX");
+    }
+    #[test]
+    fn zero_write_and_io_errors_do_not_claim_success_or_retry() {
+        for outcome in [
+            Ok(0),
+            Err(io::Error::new(ErrorKind::TimedOut, "write timeout")),
+            Err(io::Error::new(ErrorKind::BrokenPipe, "device removed")),
+        ] {
+            let state = state();
+            let mut writer = ScriptedWriter {
+                outcomes: [outcome].into(),
+                calls: vec![],
+            };
+            let error = write_bytes(&mut writer, &[1, 2, 3], &state).unwrap_err();
+            assert!(error.contains("0/3"));
+            assert_eq!(writer.calls.len(), 1);
+            let s = state.lock().unwrap();
+            assert_eq!(s.status.tx, 11);
+            assert!(s.events.is_empty());
+        }
+    }
+    #[test]
+    fn interrupted_write_retries_without_duplicating_counters_or_events() {
+        let state = state();
+        let mut writer = ScriptedWriter {
+            outcomes: [Err(io::Error::from(ErrorKind::Interrupted)), Ok(3)].into(),
+            calls: vec![],
+        };
+        write_bytes(&mut writer, &[65, 0, 255], &state).unwrap();
+        assert_eq!(writer.calls, vec![vec![65, 0, 255]; 2]);
+        let s = state.lock().unwrap();
+        assert_eq!(s.status.tx, 14);
+        assert_eq!(s.events.len(), 1);
+        assert_eq!(s.events[0].data, [65, 0, 255]);
     }
 }

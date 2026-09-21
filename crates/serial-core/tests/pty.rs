@@ -162,3 +162,66 @@ fn close_discards_a_large_rx_backlog_and_releases_the_device() {
         "no old-session data after reconnect"
     );
 }
+
+#[test]
+fn open_failure_preserves_error_and_allows_a_clean_retry() {
+    let (engine, mut peer, cfg) = setup();
+    engine.close().unwrap();
+    let previous_session = engine.status().session;
+    let mut missing = cfg.clone();
+    missing.port = format!("/dev/geekcom-missing-{}", std::process::id());
+    let error = engine.open(missing.clone()).unwrap_err();
+    assert!(error.contains(&missing.port));
+    let status = engine.status();
+    assert!(!status.connected);
+    assert!(!status.auto_running && !status.file_running);
+    assert_eq!(status.error.as_deref(), Some(error.as_str()));
+    assert_eq!(status.session, previous_session);
+    assert!(engine.start_auto(vec![1], 100).is_err());
+    assert!(engine.send_file("unused.bin".into()).is_err());
+    assert_eq!(engine.status().tx, 0);
+    engine.open(cfg).unwrap();
+    assert!(engine.status().error.is_none());
+    assert_eq!(engine.status().session, previous_session + 1);
+    engine.send(vec![0, 255]).unwrap();
+    let mut got = [0; 2];
+    peer.read_exact(&mut got).unwrap();
+    assert_eq!(got, [0, 255]);
+}
+
+#[test]
+fn encoded_payload_matches_wire_bytes_and_tx_events() {
+    use geekcom_core::{encode, Payload};
+    let (engine, mut peer, _) = setup();
+    let cases = [
+        ("中文", false, "none", "中文".as_bytes()),
+        ("中文", false, "lf", "中文\n".as_bytes()),
+        ("中文", false, "cr", "中文\r".as_bytes()),
+        ("中文", false, "crlf", "中文\r\n".as_bytes()),
+        ("00FF0D0A", true, "none", &[0, 255, 13, 10][..]),
+        ("00 FF 0D 0A", true, "crlf", &[0, 255, 13, 10][..]),
+    ];
+    let mut submitted = 0;
+    for (text, hex, ending, expected) in cases {
+        let bytes = encode(&Payload {
+            text: text.into(),
+            hex,
+            ending: ending.into(),
+        })
+        .unwrap();
+        engine.send(bytes).unwrap();
+        let mut got = vec![0; expected.len()];
+        peer.read_exact(&mut got).unwrap();
+        assert_eq!(got, expected);
+        submitted += expected.len() as u64;
+        let batch = engine.poll();
+        assert_eq!(batch.status.tx, submitted);
+        let logged: Vec<_> = batch
+            .events
+            .into_iter()
+            .filter(|e| e.direction == "TX")
+            .flat_map(|e| e.data)
+            .collect();
+        assert_eq!(logged, expected);
+    }
+}

@@ -10,6 +10,7 @@ import {
 type Harness = {
   ports: Port[];
   error: string | null;
+  connectError: string | null;
   status: Status;
   events: SerialEvent[];
   holdPoll: boolean;
@@ -37,7 +38,8 @@ async function setup(page: Page) {
     const state: Harness = {
       ports: [{ name: "/dev/ttyACM0", description: "IMU" }],
       error: null,
-      status: initial,
+      connectError: null,
+      status: structuredClone(initial),
       events: [],
       holdPoll: false,
       pollCount: 0,
@@ -71,6 +73,10 @@ async function setup(page: Page) {
               return result;
             }
             case "connect_serial":
+              if (state.connectError) {
+                state.status.error = state.connectError;
+                throw state.connectError;
+              }
               state.status = {
                 ...initial,
                 session: state.status.session + 1,
@@ -302,4 +308,42 @@ test("a poll response arriving after disconnect cannot append data or restore th
   await expect(
     page.getByRole("button", { name: "自动滚动", exact: true }),
   ).toBeDisabled();
+});
+
+test("failed connection keeps the cause visible and permits editing and retry", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.evaluate(() => {
+    window.serialTest.connectError = "无法打开 /dev/ttyACM0: Permission denied";
+  });
+  await page.getByRole("button", { name: "连接串口", exact: true }).click();
+  await expect(
+    page.getByText("无法打开 /dev/ttyACM0: Permission denied", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("串口设备", { exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "自动滚动", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "周期发送", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "连接串口", exact: true }),
+  ).toBeEnabled();
+  await page.getByLabel("串口设备", { exact: true }).fill("/dev/ttyUSB0");
+  await page.getByLabel("串口设备", { exact: true }).press("Escape");
+  await page.evaluate(() => {
+    window.serialTest.connectError = null;
+  });
+  await page.getByRole("button", { name: "连接串口", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "断开连接", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByText("无法打开 /dev/ttyACM0: Permission denied", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("串口设备", { exact: true })).toHaveValue(
+    "/dev/ttyUSB0",
+  );
 });
