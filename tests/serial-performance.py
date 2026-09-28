@@ -172,7 +172,10 @@ def run(args, implementation, mode):
                   for(let node=root?.lastElementChild;node && text.length<8192;node=node.previousElementSibling) text=node.textContent+text;
                   text=text.slice(-8192);const now=Date.now();
                   for(const m of text.matchAll(/P([0-9]{8}):([0-9]{13})/g)) {
-                    if(!seen.has(m[1])) {seen.add(m[1]);p.samples.push({id:Number(m[1]),latency_ms:now-Number(m[2])});}
+                    if(!seen.has(m[1])) {
+                      seen.add(m[1]);p.samples.push({id:Number(m[1]),latency_ms:now-Number(m[2])});
+                      if(seen.size>8192)seen.delete(seen.values().next().value);
+                    }
                   }
                 },16);
                 """, mode)
@@ -183,8 +186,17 @@ def run(args, implementation, mode):
             # Keep the GUI undisturbed while measuring.
             resource_samples = []
             control_samples = []
+            observed_samples, timer_gaps = [], []
+            measurement_start = time.monotonic()
+            next_drain = measurement_start + 10
+            next_progress = measurement_start + 60
             next_control = time.monotonic() + 2
             while thread.is_alive():
+                if driver and time.monotonic() >= next_drain:
+                    batch = driver.js("const p=window.perf;const batch={samples:p.samples,timer_gaps_ms:p.timer_gaps_ms};p.samples=[];p.timer_gaps_ms=[];return batch")
+                    observed_samples.extend(batch["samples"])
+                    timer_gaps.extend(batch["timer_gaps_ms"])
+                    next_drain = time.monotonic() + 10
                 if args.exercise_controls and driver and time.monotonic() >= next_control:
                     was_open = driver.js("return !!document.querySelector('.sidebar')")
                     before = time.monotonic()
@@ -193,8 +205,18 @@ def run(args, implementation, mode):
                     control_samples.append((time.monotonic() - before) * 1000)
                     next_control = time.monotonic() + 2
                 point = resources(process.pid if process else driver.process.pid)
-                point["elapsed_s"] = len(resource_samples)
+                point["elapsed_s"] = time.monotonic() - measurement_start
                 resource_samples.append(point)
+                if time.monotonic() >= next_progress:
+                    progress = {"implementation": implementation, "mode": mode,
+                        "elapsed_s": point["elapsed_s"], "input": dict(sent),
+                        "resources": resource_samples, "drained_samples": len(observed_samples)}
+                    progress_path = args.output / f"{implementation}-{mode}-progress.json"
+                    temporary = progress_path.with_suffix(".tmp")
+                    temporary.write_text(json.dumps(progress, indent=2))
+                    temporary.replace(progress_path)
+                    print(f"PROGRESS {implementation} {mode} {point['elapsed_s']:.0f}s RX input={sent.get('sent_bytes', 0)} bytes RSS={point['rss_mib']:.1f} MiB", flush=True)
+                    next_progress = time.monotonic() + 60
                 thread.join(1)
             if implementation == "qt":
                 stdout, _ = process.communicate(timeout=15)
@@ -204,6 +226,8 @@ def run(args, implementation, mode):
             else:
                 time.sleep(2)
                 raw = driver.js("clearInterval(window.perf.timer);return {samples:perf.samples,timer_gaps_ms:perf.timer_gaps_ms,status:document.querySelector('.statusbar').textContent}")
+                raw["samples"] = observed_samples + raw["samples"]
+                raw["timer_gaps_ms"] = timer_gaps + raw["timer_gaps_ms"]
                 before = time.monotonic()
                 driver.js("document.querySelector('.connection').click()")
                 driver.wait("return document.querySelector('.connection').textContent.includes('连接串口')")
@@ -218,12 +242,20 @@ def run(args, implementation, mode):
                 result["control_response_ms"] = summary(control_samples)
             result["rss_mib"] = summary([r["rss_mib"] for r in resource_samples])
             if len(resource_samples) > 1:
-                result["cpu_core_percent_approx"] = 100 * (resource_samples[-1]["cpu_s"]-resource_samples[0]["cpu_s"]) / (len(resource_samples)-1)
+                result["cpu_core_percent_approx"] = 100 * (resource_samples[-1]["cpu_s"]-resource_samples[0]["cpu_s"]) / (resource_samples[-1]["elapsed_s"]-resource_samples[0]["elapsed_s"])
             for label, low, high in [("early", 0, .25), ("late", .75, 1)]:
                 result[label+"_latency_ms"] = summary([s["latency_ms"] for s in raw["samples"]
                     if low * sent["sent_samples"] <= s["id"] < high * sent["sent_samples"]])
             # Missing view markers do not by themselves prove loss on the wire.
             result["unobserved_samples"] = sent["sent_samples"] - len(raw["samples"])
+            # Window by send sequence, not observation time, so a growing queue
+            # cannot move slow samples into a later, apparently healthy window.
+            windows = {}
+            for sample in raw["samples"]:
+                minute = int(sample["id"] / args.hz / 60)
+                windows.setdefault(minute, []).append(sample["latency_ms"])
+            result["latency_by_minute"] = [
+                {"minute": minute, **summary(values)} for minute, values in sorted(windows.items())]
             return result
         finally:
             stopped.set()
