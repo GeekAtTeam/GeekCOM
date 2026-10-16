@@ -2,9 +2,9 @@
 
 ![](./docs/images/GeekCOM_banner.png)
 
-跨平台串口调试工具。`feat/tauri-react-rust` 分支新增 **Tauri 2 + React + Rust** 桌面实现，用 GeekCOM 验证新技术栈；原 Qt6 / C++ 实现保留用于对照。
+跨平台串口调试工具。当前主线采用 **Tauri 2 + React + Rust** 桌面实现；原 Qt6 / C++ 实现保留用于对照和回退，迁移前基线同时保存在 `qt` 分支。
 
-## Tauri 版本（当前分支）
+## Tauri 版本（当前主线）
 
 已迁移串口配置、文本 / HEX 收发、行尾与发送预览、接收保存、文件与周期发送、计数、交互终端和主题；新增可隐藏的左侧配置、工具栏以及 HEX / ASCII 对照视图。
 
