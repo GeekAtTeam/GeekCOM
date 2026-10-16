@@ -72,6 +72,19 @@ if(GEEKCOM_BUILD_TESTS)
     set_tests_properties(serial_regressions PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()
 
+# Opt-in native performance adapter; never included in normal release builds.
+option(GEEKCOM_BUILD_BENCHMARKS "Build Linux serial performance adapter" OFF)
+if(GEEKCOM_BUILD_BENCHMARKS AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(GeekCOMPerf
+        tests/qt-performance.cpp
+        src/HexUtils.cpp src/SerialManager.cpp src/SerialDebugWidget.cpp
+        src/SerialTerminalWidget.cpp src/SerialPortConfigGroup.cpp
+        src/ThemeManager.cpp src/MainWindow.cpp resources/resources.qrc
+    )
+    target_include_directories(GeekCOMPerf PRIVATE src)
+    target_link_libraries(GeekCOMPerf PRIVATE Qt6::Widgets Qt6::SerialPort)
+endif()
+
 # macOS bundle + Dock / Finder 图标（构建机需有 iconutil，通常仅在 macOS 上可用）
 if(APPLE)
     set_target_properties(GeekCOM PROPERTIES
