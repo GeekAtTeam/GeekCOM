@@ -427,7 +427,7 @@ export default function App() {
           帮助
         </button>
         <div className="header-end">
-          <span className="version">0.1 · TAURI PREVIEW</span>
+          <span className="version">0.2.0 · TAURI</span>
           <select
             aria-label="外观"
             value={theme}
