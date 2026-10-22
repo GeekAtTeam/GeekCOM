@@ -106,6 +106,12 @@ textarea {
 select {
   padding-right: 22px;
 }
+/* Windows WebView2 often keeps a light native popup; paint options explicitly
+   so dark-theme text does not disappear on a white list surface. */
+select option {
+  background-color: var(--panel);
+  color: var(--text);
+}
 code,
 kbd {
   font-family: var(--font-mono);
@@ -199,11 +205,6 @@ small {
   align-items: center;
   gap: 18px;
   margin-left: auto;
-}
-.header-end select {
-  font-size: 11px;
-  border: 0;
-  background: transparent;
 }
 .version {
   font-size: 9px;

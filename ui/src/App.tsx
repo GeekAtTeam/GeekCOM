@@ -28,6 +28,8 @@ import {
   ChevronDown,
   RotateCcw,
   Radio,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { TerminalView, type TerminalHandle } from "./TerminalView";
 import { PortComboBox } from "./PortComboBox";
@@ -87,9 +89,13 @@ export default function App() {
   const [view, setView] = useState<View>("text");
   const [mode, setMode] = useState<"debug" | "terminal">("debug");
   const [sidebar, setSidebar] = useState(() => preference("sidebar", true));
-  const [theme, setTheme] = useState<"system" | "light" | "dark">(() =>
-    preference("theme", "system"),
-  );
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const saved = preference<"system" | "light" | "dark">("theme", "light");
+    if (saved === "light" || saved === "dark") return saved;
+    return matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  });
   const [timestamps, setTimestamps] = useState(true);
   const [autoClear, setAutoClear] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -167,13 +173,7 @@ export default function App() {
   }, [sidebar]);
   useEffect(() => {
     localStorage.setItem("theme", JSON.stringify(theme));
-    const query = matchMedia("(prefers-color-scheme: dark)");
-    const apply = () =>
-      (document.documentElement.dataset.theme =
-        theme === "system" ? (query.matches ? "dark" : "light") : theme);
-    apply();
-    query.addEventListener("change", apply);
-    return () => query.removeEventListener("change", apply);
+    document.documentElement.dataset.theme = theme;
   }, [theme]);
   useEffect(() => {
     if (!desktop) return;
@@ -428,15 +428,14 @@ export default function App() {
         </button>
         <div className="header-end">
           <span className="version">0.2.0 · TAURI</span>
-          <select
-            aria-label="外观"
-            value={theme}
-            onChange={(e) => setTheme(e.target.value as typeof theme)}
+          <button
+            className="icon-button"
+            title={theme === "dark" ? "切换到浅色" : "切换到深色"}
+            aria-label={theme === "dark" ? "切换到浅色" : "切换到深色"}
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
           >
-            <option value="system">跟随系统</option>
-            <option value="dark">深色</option>
-            <option value="light">浅色</option>
-          </select>
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
         </div>
       </header>
       <div className="connection-toolbar">

@@ -8,7 +8,9 @@ test("browser preview exposes layout without pretending to connect hardware", as
   await expect(page.getByText("浏览器预览", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "连接串口" })).toBeDisabled();
   await page.getByRole("button", { name: "HEX / ASCII", exact: true }).click();
-  await page.getByLabel("外观").selectOption("dark");
+  if ((await page.locator("html").getAttribute("data-theme")) !== "dark") {
+    await page.getByRole("button", { name: "切换到深色" }).click();
+  }
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.getByLabel("切换配置区域").click();
   await expect(page.locator(".sidebar")).toHaveCount(0);
@@ -28,7 +30,12 @@ test("minimum window size keeps primary controls in the viewport", async ({
 }) => {
   await page.setViewportSize({ width: 900, height: 640 });
   await page.goto("/");
-  await page.getByLabel("外观").selectOption("light");
+  const themeToggle = page.getByRole("button", {
+    name: /切换到(浅色|深色)/,
+  });
+  if ((await themeToggle.getAttribute("aria-label")) === "切换到浅色") {
+    await themeToggle.click();
+  }
   for (const selector of [".primary", ".statusbar", ".connection-toolbar"]) {
     const box = await page.locator(selector).first().boundingBox();
     expect(box).not.toBeNull();
