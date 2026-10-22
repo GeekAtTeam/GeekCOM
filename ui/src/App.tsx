@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { TerminalView, type TerminalHandle } from "./TerminalView";
 import { PortComboBox } from "./PortComboBox";
+import { Select } from "./Select";
 import { LogRows } from "./LogRows";
 import {
   appendRows,
@@ -520,64 +521,55 @@ export default function App() {
                 </p>
               )}
               <Field label="波特率">
-                <select
+                <Select
                   aria-label="波特率"
                   disabled={status.connected || busy}
                   value={config.baud}
-                  onChange={(e) =>
-                    setConfig({ ...config, baud: Number(e.target.value) })
-                  }
-                >
-                  {rates.map((r) => (
-                    <option key={r} value={r}>
-                      {r.toLocaleString()}
-                    </option>
-                  ))}
-                </select>
+                  options={rates.map((r) => ({
+                    value: r,
+                    label: r.toLocaleString(),
+                  }))}
+                  onChange={(baud) => setConfig({ ...config, baud })}
+                />
               </Field>
               <div className="field-pair">
                 <Field label="数据位">
-                  <select
+                  <Select
                     aria-label="数据位"
                     disabled={status.connected || busy}
                     value={config.dataBits}
-                    onChange={(e) =>
-                      setConfig({ ...config, dataBits: Number(e.target.value) })
-                    }
-                  >
-                    {[5, 6, 7, 8].map((n) => (
-                      <option key={n}>{n}</option>
-                    ))}
-                  </select>
+                    options={[5, 6, 7, 8].map((n) => ({
+                      value: n,
+                      label: String(n),
+                    }))}
+                    onChange={(dataBits) => setConfig({ ...config, dataBits })}
+                  />
                 </Field>
                 <Field label="停止位">
-                  <select
+                  <Select
                     aria-label="停止位"
                     disabled={status.connected || busy}
                     value={config.stopBits}
-                    onChange={(e) =>
-                      setConfig({ ...config, stopBits: e.target.value })
-                    }
-                  >
-                    {["1", "1.5", "2"].map((n) => (
-                      <option key={n}>{n}</option>
-                    ))}
-                  </select>
+                    options={["1", "1.5", "2"].map((n) => ({
+                      value: n,
+                      label: n,
+                    }))}
+                    onChange={(stopBits) => setConfig({ ...config, stopBits })}
+                  />
                 </Field>
               </div>
               <Field label="校验位">
-                <select
+                <Select
                   aria-label="校验位"
                   disabled={status.connected || busy}
                   value={config.parity}
-                  onChange={(e) =>
-                    setConfig({ ...config, parity: e.target.value })
-                  }
-                >
-                  <option value="none">None · 无校验</option>
-                  <option value="odd">Odd · 奇校验</option>
-                  <option value="even">Even · 偶校验</option>
-                </select>
+                  options={[
+                    { value: "none", label: "None · 无校验" },
+                    { value: "odd", label: "Odd · 奇校验" },
+                    { value: "even", label: "Even · 偶校验" },
+                  ]}
+                  onChange={(parity) => setConfig({ ...config, parity })}
+                />
               </Field>
               <p className="field-hint">
                 无流控 · 参数在连接期间锁定
@@ -810,17 +802,18 @@ export default function App() {
                   />
                   HEX 发送
                 </label>
-                <select
+                <Select
                   aria-label="发送行尾"
                   value={ending}
                   disabled={txHex || task || busy}
-                  onChange={(e) => setEnding(e.target.value)}
-                >
-                  <option value="none">无行尾</option>
-                  <option value="lf">LF</option>
-                  <option value="cr">CR</option>
-                  <option value="crlf">CRLF</option>
-                </select>
+                  options={[
+                    { value: "none", label: "无行尾" },
+                    { value: "lf", label: "LF" },
+                    { value: "cr", label: "CR" },
+                    { value: "crlf", label: "CRLF" },
+                  ]}
+                  onChange={setEnding}
+                />
               </div>
               <textarea
                 aria-label="发送数据"
