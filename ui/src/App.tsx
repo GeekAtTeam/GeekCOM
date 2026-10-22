@@ -428,7 +428,7 @@ export default function App() {
           帮助
         </button>
         <div className="header-end">
-          <span className="version">0.2.0 · TAURI</span>
+          <span className="version">0.3.0 · TAURI</span>
           <button
             className="icon-button"
             title={theme === "dark" ? "切换到浅色" : "切换到深色"}

@@ -2,11 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## [0.3.0] — 2026-10-22
+
+GeekCOM `main` is now a Tauri-only desktop project. Historical Qt sources remain
+on the `qt` branch for comparison and rollback.
+
+### Added
+- Windows NSIS packaging that bundles `WebView2Loader.dll` so MinGW builds start after install
 
 ### Changed
-- Made `main` a Tauri-only tree: removed Qt/C++ sources, CMake, and Qt packaging assets
-- Pointed historical Qt recovery to the `qt` branch; trimmed README and performance tooling accordingly
+- Removed Qt/C++ sources, CMake, and Qt packaging from `main`; recovery path is the `qt` branch
+- Replaced the theme select with a sun/moon toggle and shared menu selects for config controls
+- Unified UI and monospace font stacks; tightened tabs and segmented control selection
+- Brightened the light theme and raised dark-theme contrast for chrome, status, and log surfaces
+- Trimmed README and performance tooling to the Tauri workflow
+
+### Fixed
+- Restored the executable bit on `packaging/linux/install-local.sh`
 
 ## [0.2.0] — 2026-10-16
 
