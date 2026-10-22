@@ -1,11 +1,9 @@
 :root {
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    "Noto Sans CJK SC",
-    sans-serif;
+  --font-ui:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-family: var(--font-ui);
   color-scheme: dark;
   --bg: #171a20;
   --panel: #1d2128;
@@ -110,7 +108,7 @@ select {
 }
 code,
 kbd {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
 }
 small {
   font-size: 10px;
@@ -254,7 +252,6 @@ small {
   color: var(--text);
 }
 .device-summary {
-  font-family: monospace;
   font-size: 12px;
   display: flex;
   flex-direction: column;
@@ -536,10 +533,7 @@ small {
   overflow: auto;
   position: relative;
   color: var(--log-text);
-  font:
-    12px/1.8 "SFMono-Regular",
-    Consolas,
-    monospace;
+  font: 12px/1.8 var(--font-mono);
   overflow-anchor: none;
 }
 .log-list {
@@ -594,7 +588,6 @@ small {
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  font-family: inherit;
 }
 .empty-glyph {
   color: var(--log-text);
@@ -606,14 +599,12 @@ small {
   margin-bottom: 18px;
 }
 .empty-state h2 {
-  font-family: inherit;
   font-size: 14px;
   font-weight: 600;
   color: #f0f4f8;
   margin: 0 0 7px;
 }
 .empty-state p {
-  font-family: inherit;
   font-size: 11px;
   color: var(--log-muted);
   margin: 0;
@@ -683,7 +674,7 @@ small {
   height: 73px;
   background: var(--log);
   color: var(--log-text);
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   border-color: var(--log-border);
 }
@@ -785,7 +776,7 @@ small {
 .statusbar b {
   color: var(--text);
   font-weight: 500;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 .statusbar button {
   font-size: 10px;

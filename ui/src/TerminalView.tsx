@@ -23,24 +23,17 @@ export const TerminalView = forwardRef<
     [],
   );
   useEffect(() => {
+    const styles = getComputedStyle(document.documentElement);
     const term = new Terminal({
       cursorBlink: true,
-      fontFamily: '"JetBrains Mono", "SFMono-Regular", Consolas, monospace',
+      fontFamily: styles.getPropertyValue("--font-mono").trim(),
       fontSize: 13,
       scrollback: 5000,
       theme: {
-        background: getComputedStyle(document.documentElement)
-          .getPropertyValue("--log")
-          .trim(),
-        foreground: getComputedStyle(document.documentElement)
-          .getPropertyValue("--log-text")
-          .trim(),
-        cursor: getComputedStyle(document.documentElement)
-          .getPropertyValue("--accent")
-          .trim(),
-        selectionBackground: getComputedStyle(document.documentElement)
-          .getPropertyValue("--log-selection")
-          .trim(),
+        background: styles.getPropertyValue("--log").trim(),
+        foreground: styles.getPropertyValue("--log-text").trim(),
+        cursor: styles.getPropertyValue("--accent").trim(),
+        selectionBackground: styles.getPropertyValue("--log-selection").trim(),
       },
     });
     const fit = new FitAddon();
