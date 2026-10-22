@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Made `main` a Tauri-only tree: removed Qt/C++ sources, CMake, and Qt packaging assets
+- Pointed historical Qt recovery to the `qt` branch; trimmed README and performance tooling accordingly
+
 ## [0.2.0] — 2026-10-16
 
 GeekCOM now uses the Tauri desktop application as its main implementation. The

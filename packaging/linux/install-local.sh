@@ -1,34 +1,49 @@
 #!/usr/bin/env bash
-# 将 GeekCOM 安装到 ~/.local（二进制 + .desktop + 图标），便于 GNOME/Ubuntu Dock 显示正确图标。
+# Install a standalone GeekCOM build and its icon for the current desktop user.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BUILD_DIR="${ROOT_DIR}/build"
+BINARY="${1:-${ROOT_DIR}/src-tauri/target/debug/geekcom}"
+PREFIX="${HOME}/.local"
+APP_DIR="${PREFIX}/share/geekcom-tauri"
+DESKTOP_FILE="${PREFIX}/share/applications/geekcom.desktop"
 
-if [[ ! -d "${BUILD_DIR}" ]]; then
-  echo "请先编译：cmake -S \"${ROOT_DIR}\" -B build && cmake --build build" >&2
+if [[ ! -x "${BINARY}" ]]; then
+  echo "Build first: npm run tauri build -- --debug --no-bundle" >&2
   exit 1
 fi
 
-PREFIX="${HOME}/.local"
-BIN_PATH="${PREFIX}/bin/GeekCOM"
-DESKTOP_FILE="${PREFIX}/share/applications/geekcom.desktop"
-
-echo "Installing to ${PREFIX} ..."
-cmake --install "${BUILD_DIR}" --prefix "${PREFIX}"
-
-# GNOME 从菜单启动时未必继承 shell 的 PATH；改为绝对路径，避免找不到二进制、Dock 退回占位图标
-if [[ -f "${DESKTOP_FILE}" && -x "${BIN_PATH}" ]]; then
-  sed -i "s|^Exec=.*|Exec=${BIN_PATH}|" "${DESKTOP_FILE}"
-  sed -i "s|^TryExec=.*|TryExec=${BIN_PATH}|" "${DESKTOP_FILE}"
+install -d "${PREFIX}/bin" "${PREFIX}/share/applications" "${APP_DIR}"
+if [[ -f "${DESKTOP_FILE}" ]]; then
+  cp -p "${DESKTOP_FILE}" "${APP_DIR}/geekcom.desktop.backup.$(date +%s%N)"
 fi
+# Replace atomically so an already running instance can finish normally.
+TEMP_BINARY="${PREFIX}/bin/.geekcom.install.$$"
+trap 'rm -f "${TEMP_BINARY}"' EXIT
+install -m 755 "${BINARY}" "${TEMP_BINARY}"
+mv -f "${TEMP_BINARY}" "${PREFIX}/bin/geekcom"
+ICON_HASH="$(sha256sum "${ROOT_DIR}/src-tauri/icons/icon.png" | cut -d ' ' -f 1)"
+ICON_PATH="${APP_DIR}/icon-${ICON_HASH}.png"
+install -m 644 "${ROOT_DIR}/src-tauri/icons/icon.png" "${ICON_PATH}"
 
-if command -v desktop-file-validate >/dev/null 2>&1; then
-  desktop-file-validate "${DESKTOP_FILE}" || true
+cat > "${DESKTOP_FILE}" <<EOF
+[Desktop Entry]
+Type=Application
+Name=GeekCOM
+Comment=串口调试工作台 · Tauri
+Exec="${PREFIX}/bin/geekcom"
+Icon=${ICON_PATH}
+Terminal=false
+Categories=Development;Electronics;
+StartupNotify=true
+StartupWMClass=geekcom
+EOF
+
+if command -v desktop-file-validate >/dev/null; then
+  desktop-file-validate "${DESKTOP_FILE}"
 fi
-
-update-desktop-database "${PREFIX}/share/applications" 2>/dev/null || true
-gtk-update-icon-cache -f -t "${PREFIX}/share/icons/hicolor" 2>/dev/null || true
-
-echo "完成。请从「应用程序」网格打开 GeekCOM（勿长期用 ./build/GeekCOM），再固定到 Dock。"
-echo "若仍无图标：注销重新登录一次，或确认 Wayland 会话下已用本脚本安装（xprop 仅对 X11 窗口有效）。"
+if command -v update-desktop-database >/dev/null; then
+  update-desktop-database "${PREFIX}/share/applications"
+fi
+echo "Installed: ${PREFIX}/bin/geekcom"
+echo "Desktop entry: ${DESKTOP_FILE} (previous entry backed up in ${APP_DIR})"
