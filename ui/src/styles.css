@@ -5,17 +5,17 @@
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   font-family: var(--font-ui);
   color-scheme: dark;
-  --bg: #171a20;
-  --panel: #1d2128;
-  --raised: #252a33;
-  --border: #303640;
-  --text: #d9dfe7;
-  --muted: #87929f;
+  --bg: #14171c;
+  --panel: #1b1f26;
+  --raised: #262b35;
+  --border: #4a5563;
+  --text: #e8eef5;
+  --muted: #a0aab8;
   --accent: #e85552;
   --accent-hover: #d94b48;
   --accent-active: #c6413e;
-  --field: #181c23;
-  --hover: #2b313c;
+  --field: #12161c;
+  --hover: #313846;
   --log: #0b0e12;
   --log-text: #e8eef5;
   --log-muted: #9aa8b8;
@@ -265,7 +265,8 @@ small {
 .connection-indicator {
   font-size: 9px;
   letter-spacing: 1.3px;
-  color: var(--muted);
+  color: var(--text);
+  opacity: 0.82;
   display: flex;
   gap: 8px;
   align-items: center;
@@ -274,7 +275,7 @@ small {
   display: inline-block;
   width: 6px;
   height: 6px;
-  background: #687482;
+  background: #8b97a6;
   border-radius: 50%;
   flex-shrink: 0;
 }
