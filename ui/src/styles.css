@@ -446,13 +446,13 @@ small {
   padding: 0 18px 16px;
 }
 .tabs {
-  height: 49px;
+  height: 36px;
   display: flex;
   align-items: stretch;
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   gap: 18px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .tab {
   border-radius: 0;
@@ -460,6 +460,7 @@ small {
   color: var(--muted);
   padding: 0 3px;
   border-bottom: 2px solid transparent;
+  gap: 6px;
 }
 .tab.selected {
   border-bottom-color: var(--accent);
@@ -503,11 +504,13 @@ small {
   font-size: 10px;
   padding: 4px 9px;
   border-radius: 3px;
+  border: 1px solid transparent;
   color: var(--muted);
 }
 .segmented button.chosen {
-  background: var(--raised);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--text);
+  font-weight: 600;
 }
 .check {
   display: inline-flex;
