@@ -29,12 +29,18 @@ export const TerminalView = forwardRef<
       fontSize: 13,
       scrollback: 5000,
       theme: {
-        background: "#111419",
-        foreground: "#d7e0e9",
+        background: getComputedStyle(document.documentElement)
+          .getPropertyValue("--log")
+          .trim(),
+        foreground: getComputedStyle(document.documentElement)
+          .getPropertyValue("--log-text")
+          .trim(),
         cursor: getComputedStyle(document.documentElement)
           .getPropertyValue("--accent")
           .trim(),
-        selectionBackground: "#374555",
+        selectionBackground: getComputedStyle(document.documentElement)
+          .getPropertyValue("--log-selection")
+          .trim(),
       },
     });
     const fit = new FitAddon();
